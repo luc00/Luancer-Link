@@ -1,0 +1,623 @@
+[
+  {
+    "id": "prof_mwmaskn6",
+    "handle": "studio.roma",
+    "displayName": "Studio Roma",
+    "role": "Creator & Brand Page",
+    "bio": "Benvenuto nella mia pagina Linkme.bio. Scopri link, prodotti e contatti diretti.",
+    "location": "Italia",
+    "category": "Creator & Media",
+    "verified": false,
+    "showFollowersCount": true,
+    "availabilityText": "",
+    "avatarUrl": "",
+    "bannerUrl": "",
+    "views": 0,
+    "updatedAt": "2026-11-18T15:50:30.044Z",
+    "socials": [
+      {
+        "id": "soc_mwmaskn6_1",
+        "platform": "instagram",
+        "url": "https://instagram.com/studio.roma",
+        "label": "Instagram",
+        "visible": true,
+        "followers": 1200
+      },
+      {
+        "id": "soc_mwmaskn6_2",
+        "platform": "whatsapp",
+        "url": "https://wa.me/393401234567",
+        "label": "WhatsApp",
+        "visible": true
+      }
+    ],
+    "blocks": [
+      {
+        "id": "blk_mwmaskn6_wa",
+        "type": "whatsapp",
+        "visible": true,
+        "title": "Scrivimi su WhatsApp",
+        "subtitle": "Chat diretta con messaggio precompilato",
+        "whatsappPhone": "393401234567",
+        "whatsappMessage": "Ciao Studio Roma! Ti scrivo dalla tua pagina Linkme.bio.",
+        "clicks": 0
+      },
+      {
+        "id": "blk_mwmaskn6_link",
+        "type": "link",
+        "visible": true,
+        "title": "Il mio sito e Portfolio",
+        "subtitle": "Scopri tutti i miei progetti e servizi",
+        "url": "https://example.com",
+        "iconName": "globe",
+        "highlight": true,
+        "clicks": 0
+      }
+    ],
+    "theme": {
+      "presetId": "linkme-bio-violet",
+      "heroStyle": "avatar",
+      "backgroundType": "solid",
+      "backgroundColor": "#FAF9F7",
+      "gradientStart": "#FAF9F7",
+      "gradientEnd": "#F3F0EA",
+      "gradientAngle": 180,
+      "pattern": "none",
+      "backgroundImageUrl": "",
+      "surfaceColor": "#FFFFFF",
+      "textColor": "#111115",
+      "mutedTextColor": "#52525B",
+      "accentColor": "#635BFF",
+      "accentTextColor": "#FFFFFF",
+      "borderColor": "#E6E2DC",
+      "buttonShape": "rounded",
+      "cardVariant": "elevated",
+      "font": "jakarta",
+      "spacing": "balanced",
+      "socialPosition": "top",
+      "socialStyle": "brand"
+    },
+    "messages": []
+  },
+  {
+    "id": "prof_elena",
+    "handle": "elena.studio",
+    "displayName": "Elena Moretti",
+    "role": "Direttrice Creativa & Brand Designer",
+    "bio": "Identità visive, direzione fotografica e progetti editoriali tra Milano e Zurigo.",
+    "location": "Milano, Italia",
+    "category": "Design & Arte",
+    "verified": true,
+    "showFollowersCount": true,
+    "availabilityText": "Disponibile per Q2 2026",
+    "avatarUrl": "/src/assets/images/avatar_elena_studio_1795007658544.jpg",
+    "bannerUrl": "/src/assets/images/cover_design_showcase_1795007659314.jpg",
+    "views": 1840,
+    "updatedAt": "2026-11-18T06:00:00.000Z",
+    "socials": [
+      {
+        "id": "s1",
+        "platform": "instagram",
+        "url": "https://instagram.com/elenamoretti.studio",
+        "label": "Instagram",
+        "visible": true,
+        "followers": 142000
+      },
+      {
+        "id": "s2",
+        "platform": "tiktok",
+        "url": "https://tiktok.com/@elenamoretti",
+        "label": "TikTok",
+        "visible": true,
+        "followers": 86500
+      },
+      {
+        "id": "s3",
+        "platform": "youtube",
+        "url": "https://youtube.com/@elenastudio",
+        "label": "YouTube",
+        "visible": true,
+        "followers": 48200
+      },
+      {
+        "id": "s4",
+        "platform": "x",
+        "url": "https://x.com/elenamoretti",
+        "label": "X",
+        "visible": true,
+        "followers": 19400
+      },
+      {
+        "id": "s5",
+        "platform": "linkedin",
+        "url": "https://linkedin.com/in/elenamoretti",
+        "label": "LinkedIn",
+        "visible": true,
+        "followers": 14300
+      },
+      {
+        "id": "s6",
+        "platform": "behance",
+        "url": "https://behance.net/elenamoretti",
+        "label": "Behance",
+        "visible": true,
+        "followers": 9800
+      },
+      {
+        "id": "s7",
+        "platform": "email",
+        "url": "mailto:elena@elenamoretti.studio",
+        "label": "Email",
+        "visible": true
+      }
+    ],
+    "blocks": [
+      {
+        "id": "b1",
+        "type": "featured",
+        "visible": true,
+        "title": "Monografia Progetti 2025–2026 | Studio Moretti",
+        "subtitle": "Identità visive, direction e architettura editoriale",
+        "url": "https://behance.net",
+        "imageUrl": "/src/assets/images/cover_design_showcase_1795007659314.jpg",
+        "badgeText": "In Evidenza",
+        "clicks": 412
+      },
+      {
+        "id": "b_pg1",
+        "type": "photo_grid",
+        "visible": true,
+        "title": "Collezioni Principali",
+        "clicks": 0,
+        "photoGridItems": [
+          {
+            "id": "pg1",
+            "title": "Brand Identity & Lookbook",
+            "url": "https://behance.net",
+            "imageUrl": "/src/assets/images/cover_design_showcase_1795007659314.jpg",
+            "clicks": 184
+          },
+          {
+            "id": "pg2",
+            "title": "Sessioni Vinile & Sound Design",
+            "url": "https://open.spotify.com",
+            "imageUrl": "/src/assets/images/cover_vinyl_audio_1795007659433.jpg",
+            "clicks": 152
+          }
+        ]
+      },
+      {
+        "id": "b2",
+        "type": "header",
+        "visible": true,
+        "title": "LINK VELOCI",
+        "clicks": 0
+      },
+      {
+        "id": "b_wa1",
+        "type": "whatsapp",
+        "visible": true,
+        "title": "Scrivimi su WhatsApp per un Preventivo",
+        "subtitle": "Risposta diretta per nuovi progetti di branding",
+        "whatsappPhone": "393401234567",
+        "whatsappMessage": "Ciao Elena! Ti contatto dalla tua pagina Linkme.bio per una consulenza.",
+        "clicks": 194
+      },
+      {
+        "id": "b_prod1",
+        "type": "product",
+        "visible": true,
+        "title": "Brand Identity System Kit (Figma + PDF)",
+        "subtitle": "Template completo utilizzato nel nostro studio di Milano",
+        "url": "https://gumroad.com",
+        "imageUrl": "/src/assets/images/cover_design_showcase_1795007659314.jpg",
+        "productPrice": "€ 49,00",
+        "productBadge": "Store in Bio",
+        "clicks": 162
+      },
+      {
+        "id": "b4",
+        "type": "link",
+        "visible": true,
+        "title": "Prenota Consulenza Creativa (30 min)",
+        "subtitle": "Calendario aperto per nuovi brand e restyling",
+        "url": "https://cal.com",
+        "iconName": "calendar",
+        "highlight": true,
+        "clicks": 287
+      },
+      {
+        "id": "b5",
+        "type": "link",
+        "visible": true,
+        "title": "Portfolio Completo & Case Study",
+        "subtitle": "Architettura dell’informazione e progetti recenti",
+        "url": "https://dribbble.com",
+        "iconName": "briefcase",
+        "clicks": 245
+      },
+      {
+        "id": "b5b",
+        "type": "link",
+        "visible": true,
+        "title": "Listino Servizi & Kit Brand 2026",
+        "subtitle": "Documento PDF aggiornato",
+        "url": "https://notion.so",
+        "iconName": "file",
+        "clicks": 164
+      },
+      {
+        "id": "b_media",
+        "type": "media",
+        "visible": true,
+        "title": "Dietro le Quinte: Direzione Creativa a Milano",
+        "subtitle": "Episodio Studio Podcast · 24 min",
+        "url": "https://open.spotify.com",
+        "mediaType": "audio",
+        "mediaDuration": "24:15",
+        "clicks": 118
+      },
+      {
+        "id": "b_hdr2",
+        "type": "header",
+        "visible": true,
+        "title": "ESPLORA",
+        "clicks": 0
+      },
+      {
+        "id": "b_sg1",
+        "type": "social_grid",
+        "visible": true,
+        "title": "Dal Feed Studio",
+        "clicks": 0,
+        "socialGridItems": [
+          {
+            "id": "sg1",
+            "caption": "Studio luce naturale e materiali tattili",
+            "url": "https://instagram.com",
+            "imageUrl": "/src/assets/images/cover_design_showcase_1795007659314.jpg",
+            "mediaKind": "carousel",
+            "clicks": 94
+          },
+          {
+            "id": "sg2",
+            "caption": "Ascolto analogico in studio",
+            "url": "https://instagram.com",
+            "imageUrl": "/src/assets/images/cover_vinyl_audio_1795007659433.jpg",
+            "mediaKind": "video",
+            "clicks": 76
+          },
+          {
+            "id": "sg3",
+            "caption": "Nuovi ritratti editoriali",
+            "url": "https://instagram.com",
+            "imageUrl": "/src/assets/images/avatar_elena_studio_1795007658544.jpg",
+            "mediaKind": "image",
+            "clicks": 112
+          }
+        ]
+      },
+      {
+        "id": "b6",
+        "type": "contact",
+        "visible": true,
+        "title": "Newsletter & Richieste",
+        "subtitle": "Lascia la tua email per collaborazioni o aggiornamenti.",
+        "contactPlaceholder": "tua@email.it",
+        "contactButtonText": "Iscriviti",
+        "clicks": 38
+      }
+    ],
+    "theme": {
+      "presetId": "linkme-espresso",
+      "heroStyle": "fullbleed",
+      "backgroundType": "gradient",
+      "backgroundColor": "#1B1613",
+      "gradientStart": "#231C17",
+      "gradientEnd": "#0F0D0B",
+      "gradientAngle": 180,
+      "pattern": "none",
+      "backgroundImageUrl": "",
+      "surfaceColor": "#27211D",
+      "textColor": "#FFFFFF",
+      "mutedTextColor": "#D6CEC7",
+      "accentColor": "#3B82F6",
+      "accentTextColor": "#FFFFFF",
+      "borderColor": "#3A312B",
+      "buttonShape": "rounded",
+      "cardVariant": "glass",
+      "font": "outfit",
+      "spacing": "balanced",
+      "socialPosition": "top",
+      "socialStyle": "brand"
+    },
+    "messages": [
+      {
+        "id": "msg_1",
+        "senderName": "Chiara Valenti",
+        "senderEmail": "chiara@casaeditoriale.it",
+        "message": "Vorremmo collaborare al restyling della nostra collana autunnale.",
+        "createdAt": "2026-11-17T14:22:00.000Z"
+      }
+    ]
+  },
+  {
+    "id": "prof_marco",
+    "handle": "marco.dev",
+    "displayName": "Marco Bellini",
+    "role": "Software Architect & Indie Maker",
+    "bio": "Costruisco strumenti web ad alte prestazioni, scrivo di TypeScript e condivido architetture open-source.",
+    "location": "Torino, Italia",
+    "category": "Tech & Sviluppo",
+    "verified": true,
+    "showFollowersCount": true,
+    "availabilityText": "Open-source & Advisory",
+    "avatarUrl": "/src/assets/images/avatar_marco_dev_1795007657781.jpg",
+    "bannerUrl": "",
+    "views": 1290,
+    "updatedAt": "2026-11-18T04:30:00.000Z",
+    "socials": [
+      {
+        "id": "ms1",
+        "platform": "github",
+        "url": "https://github.com/marcobellini",
+        "label": "GitHub",
+        "visible": true,
+        "followers": 42800
+      },
+      {
+        "id": "ms2",
+        "platform": "x",
+        "url": "https://x.com/marcobellini",
+        "label": "X",
+        "visible": true,
+        "followers": 61500
+      },
+      {
+        "id": "ms3",
+        "platform": "youtube",
+        "url": "https://youtube.com/@marcodev",
+        "label": "YouTube",
+        "visible": true,
+        "followers": 94200
+      },
+      {
+        "id": "ms4",
+        "platform": "linkedin",
+        "url": "https://linkedin.com/in/marcobellini",
+        "label": "LinkedIn",
+        "visible": true,
+        "followers": 28100
+      },
+      {
+        "id": "ms5",
+        "platform": "telegram",
+        "url": "https://t.me/marcodev",
+        "label": "Telegram",
+        "visible": true,
+        "followers": 12400
+      }
+    ],
+    "blocks": [
+      {
+        "id": "mb1",
+        "type": "link",
+        "visible": true,
+        "title": "Starter Kit Full-Stack TypeScript",
+        "subtitle": "Template gratuito con Vite, Express e test deterministici",
+        "url": "https://github.com",
+        "iconName": "code",
+        "badgeText": "Open Source",
+        "highlight": true,
+        "clicks": 390
+      },
+      {
+        "id": "mb2",
+        "type": "media",
+        "visible": true,
+        "title": "Podcast Ep. 42: Architetture senza complessità",
+        "subtitle": "Ospite: Giulia Ferri · Sistemi distribuiti pratici",
+        "url": "https://open.spotify.com",
+        "mediaType": "audio",
+        "mediaDuration": "34:18",
+        "clicks": 175
+      },
+      {
+        "id": "mb3",
+        "type": "grid",
+        "visible": true,
+        "title": "Link Veloci",
+        "clicks": 0,
+        "gridItems": [
+          {
+            "id": "mg1",
+            "title": "Setup Scrivania",
+            "subtitle": "Hardware 2026",
+            "url": "https://notion.so",
+            "iconName": "layers",
+            "clicks": 112
+          },
+          {
+            "id": "mg2",
+            "title": "Canale YouTube",
+            "subtitle": "Deep dive video",
+            "url": "https://youtube.com",
+            "iconName": "mic",
+            "clicks": 194
+          }
+        ]
+      },
+      {
+        "id": "mb4",
+        "type": "link",
+        "visible": true,
+        "title": "Prenota sessione di Code Review",
+        "subtitle": "60 minuti dedicati alla tua codebase",
+        "url": "https://cal.com",
+        "iconName": "calendar",
+        "clicks": 84
+      }
+    ],
+    "theme": {
+      "presetId": "linkme-bio-forest",
+      "heroStyle": "avatar",
+      "backgroundType": "gradient",
+      "backgroundColor": "#193518",
+      "gradientStart": "#1D3E1C",
+      "gradientEnd": "#10240F",
+      "gradientAngle": 180,
+      "pattern": "none",
+      "backgroundImageUrl": "",
+      "surfaceColor": "#224520",
+      "textColor": "#FFFFFF",
+      "mutedTextColor": "#C5DEC3",
+      "accentColor": "#A3E635",
+      "accentTextColor": "#10240F",
+      "borderColor": "#4F7A4D",
+      "buttonShape": "rounded",
+      "cardVariant": "filled",
+      "font": "outfit",
+      "spacing": "balanced",
+      "socialPosition": "bottom",
+      "socialStyle": "circle"
+    },
+    "messages": []
+  },
+  {
+    "id": "prof_atelier",
+    "handle": "atelier.roma",
+    "displayName": "Atelier L'Aventura",
+    "role": "Specialty Coffee & Listening Bar",
+    "bio": "Caffè monorigine tostati in micro-lotti, ascolto in vinile analogico e rassegne serali nel cuore di Monti.",
+    "location": "Roma, Via Urbana 48",
+    "category": "Locali & Cultura",
+    "verified": true,
+    "showFollowersCount": true,
+    "availabilityText": "Aperto Mar–Dom · 08:30–23:00",
+    "avatarUrl": "/src/assets/images/avatar_atelier_roma_1795007659419.jpg",
+    "bannerUrl": "/src/assets/images/cover_vinyl_audio_1795007659433.jpg",
+    "views": 2451,
+    "updatedAt": "2026-11-18T03:45:00.000Z",
+    "socials": [
+      {
+        "id": "as1",
+        "platform": "instagram",
+        "url": "https://instagram.com/atelier.roma",
+        "label": "Instagram",
+        "visible": true,
+        "followers": 58400
+      },
+      {
+        "id": "as2",
+        "platform": "spotify",
+        "url": "https://open.spotify.com",
+        "label": "Spotify",
+        "visible": true,
+        "followers": 18900
+      },
+      {
+        "id": "as3",
+        "platform": "whatsapp",
+        "url": "https://wa.me/3906123456",
+        "label": "WhatsApp",
+        "visible": true
+      },
+      {
+        "id": "as4",
+        "platform": "website",
+        "url": "https://atelierroma.it",
+        "label": "Sito Web",
+        "visible": true
+      }
+    ],
+    "blocks": [
+      {
+        "id": "ab0",
+        "type": "whatsapp",
+        "visible": true,
+        "title": "Prenota su WhatsApp (Conferma Immediata)",
+        "subtitle": "Messaggio precompilato per tavolo o asporto",
+        "whatsappPhone": "39061234567",
+        "whatsappMessage": "Ciao Atelier! Vorrei prenotare un tavolo per venerdì sera.",
+        "clicks": 412
+      },
+      {
+        "id": "ab1",
+        "type": "featured",
+        "visible": true,
+        "title": "Listening Session: Jazz Giapponese su Vinile",
+        "subtitle": "Ogni venerdì dalle 20:30 · Selezione originale anni ’70",
+        "url": "https://ra.co",
+        "imageUrl": "/src/assets/images/cover_vinyl_audio_1795007659433.jpg",
+        "badgeText": "Questo Venerdì",
+        "clicks": 521
+      },
+      {
+        "id": "ab_prod",
+        "type": "product",
+        "visible": true,
+        "title": "Grani Etiopia Yirgacheffe 250g",
+        "subtitle": "Tostatura chiara filtro · Note di gelsomino e agrumi",
+        "url": "https://atelierroma.it/shop",
+        "imageUrl": "/src/assets/images/cover_vinyl_audio_1795007659433.jpg",
+        "productPrice": "€ 16,50",
+        "productBadge": "In Store",
+        "clicks": 289
+      },
+      {
+        "id": "ab2",
+        "type": "link",
+        "visible": true,
+        "title": "Menu Caffetteria & Vini Naturali",
+        "subtitle": "Estrazioni filtro V60, espresso della settimana e calici",
+        "url": "https://atelierroma.it/menu",
+        "iconName": "coffee",
+        "clicks": 640
+      },
+      {
+        "id": "ab3",
+        "type": "link",
+        "visible": true,
+        "title": "Prenota un tavolo per la sera",
+        "subtitle": "Posti limitati per le sessioni d’ascolto",
+        "url": "https://atelierroma.it/prenota",
+        "iconName": "calendar",
+        "clicks": 318
+      },
+      {
+        "id": "ab4",
+        "type": "link",
+        "visible": true,
+        "title": "Abbonamento Grani Tostati",
+        "subtitle": "Spedizione mensile in tutta Italia",
+        "url": "https://atelierroma.it/shop",
+        "iconName": "bag",
+        "clicks": 147
+      }
+    ],
+    "theme": {
+      "presetId": "linkme-bio-crimson",
+      "heroStyle": "avatar",
+      "backgroundType": "solid",
+      "backgroundColor": "#8B2320",
+      "gradientStart": "#8B2320",
+      "gradientEnd": "#6E1816",
+      "gradientAngle": 180,
+      "pattern": "none",
+      "backgroundImageUrl": "",
+      "surfaceColor": "#9E2B27",
+      "textColor": "#FFFFFF",
+      "mutedTextColor": "#F5D0CE",
+      "accentColor": "#FFFFFF",
+      "accentTextColor": "#8B2320",
+      "borderColor": "#F3D4D3",
+      "buttonShape": "sharp",
+      "cardVariant": "outline",
+      "font": "jakarta",
+      "spacing": "compact",
+      "socialPosition": "bottom",
+      "socialStyle": "minimal"
+    },
+    "messages": []
+  }
+]

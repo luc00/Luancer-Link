@@ -1,0 +1,6 @@
+{
+  "name": "FiloBio — Studio Profili & Link in Bio",
+  "description": "Piattaforma completa e personalizzabile dal pubblico per creare profili Link in Bio, icone social, link veloci, card media e pagine condivisibili con QR code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

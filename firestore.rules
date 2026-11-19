@@ -1,0 +1,249 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar: Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Shared Security Primitives ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'lucquixada@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidHandleId(handle) {
+      return handle is string &&
+        handle.size() >= 2 &&
+        handle.size() <= 40 &&
+        handle.matches('^[a-z0-9][a-z0-9._\\-]{0,38}[a-z0-9]$');
+    }
+
+    function isValidSocialsList(socials) {
+      return socials is list &&
+        socials.size() <= 20 &&
+        (
+          socials.size() == 0 || (
+            socials[0] is map &&
+            socials[0].id is string && socials[0].id.size() <= 64 &&
+            socials[0].platform is string && socials[0].platform.size() <= 40 &&
+            socials[0].url is string && socials[0].url.size() <= 500 &&
+            (!('kind' in socials[0]) || socials[0].kind in ['link', 'divider']) &&
+            (!('iconImageUrl' in socials[0]) || (socials[0].iconImageUrl is string && socials[0].iconImageUrl.size() <= 30000)) &&
+            (!('iconShape' in socials[0]) || socials[0].iconShape in ['circle', 'square', 'rounded']) &&
+            (!('dividerStyle' in socials[0]) || socials[0].dividerStyle in ['line', 'dashed', 'dotted', 'gradient']) &&
+            (!('dividerColor' in socials[0]) || (socials[0].dividerColor is string && socials[0].dividerColor.size() <= 32))
+          )
+        );
+    }
+
+    function isValidBlocksList(blocks) {
+      return blocks is list &&
+        blocks.size() <= 50 &&
+        (
+          blocks.size() == 0 || (
+            blocks[0] is map &&
+            blocks[0].id is string && blocks[0].id.size() <= 64 &&
+            blocks[0].type is string && blocks[0].type.size() <= 40 &&
+            blocks[0].visible is bool &&
+            blocks[0].title is string && blocks[0].title.size() <= 200 &&
+            (!('videoUrl' in blocks[0]) || (blocks[0].videoUrl is string && blocks[0].videoUrl.size() <= 500)) &&
+            (!('imageUrl' in blocks[0]) || (blocks[0].imageUrl is string && blocks[0].imageUrl.size() <= 30000))
+          )
+        );
+    }
+
+    function isValidThemeMap(theme) {
+      return theme is map &&
+        theme.presetId is string && theme.presetId.size() <= 64 &&
+        theme.backgroundType is string && theme.backgroundType.size() <= 32 &&
+        theme.backgroundColor is string && theme.backgroundColor.size() <= 64 &&
+        theme.cardVariant is string && theme.cardVariant.size() <= 32 &&
+        theme.font is string && theme.font.size() <= 32 &&
+        (!('socialSectionTitle' in theme) || (theme.socialSectionTitle is string && theme.socialSectionTitle.size() <= 80)) &&
+        (!('showSocialLabels' in theme) || theme.showSocialLabels is bool);
+    }
+
+    function isValidProfile(data, pathHandle) {
+      return data.keys().hasAll([
+          'id', 'handle', 'displayName', 'role', 'bio', 'location',
+          'category', 'verified', 'showFollowersCount', 'availabilityText',
+          'avatarUrl', 'bannerUrl', 'views', 'socials', 'blocks',
+          'theme', 'ownerUid', 'isPublic', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'handle', 'displayName', 'role', 'bio', 'location',
+          'category', 'verified', 'showFollowersCount', 'availabilityText',
+          'avatarUrl', 'bannerUrl', 'views', 'socials', 'blocks',
+          'theme', 'ownerUid', 'isPublic', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 2 && data.id.size() <= 64 &&
+        data.handle == pathHandle &&
+        isValidHandleId(data.handle) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        data.role is string && data.role.size() <= 120 &&
+        data.bio is string && data.bio.size() <= 500 &&
+        data.location is string && data.location.size() <= 80 &&
+        data.category is string && data.category.size() <= 80 &&
+        data.verified is bool &&
+        data.showFollowersCount is bool &&
+        data.availabilityText is string && data.availabilityText.size() <= 120 &&
+        data.avatarUrl is string && data.avatarUrl.size() <= 140000 &&
+        data.bannerUrl is string && data.bannerUrl.size() <= 180000 &&
+        data.views is int && data.views >= 0 && data.views <= 100000000 &&
+        isValidSocialsList(data.socials) &&
+        isValidBlocksList(data.blocks) &&
+        isValidThemeMap(data.theme) &&
+        (data.ownerUid == null || (data.ownerUid is string && data.ownerUid.size() <= 128)) &&
+        data.isPublic == true &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['id', 'senderName', 'senderEmail', 'message', 'profileOwnerUid', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'senderName', 'senderEmail', 'message', 'profileOwnerUid', 'createdAt']) &&
+        data.id is string && isValidId(data.id) &&
+        data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 100 &&
+        data.senderEmail is string && data.senderEmail.size() >= 3 && data.senderEmail.size() <= 160 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 1000 &&
+        (data.profileOwnerUid == null || (data.profileOwnerUid is string && data.profileOwnerUid.size() <= 128)) &&
+        data.createdAt is timestamp;
+    }
+
+    // --- Collection: /profiles/{handle} ---
+    match /profiles/{handle} {
+      // Public link-in-bio pages & directory are readable by all visitors without exposing visitor email PII.
+      allow get: if isValidHandleId(handle) && (resource == null || resource.data.isPublic == true);
+      allow list: if resource.data.isPublic == true;
+
+      // Any visitor can create a new unclaimed bio page, or a signed-in verified user can create one under their UID.
+      allow create: if isValidHandleId(handle) &&
+        isValidProfile(incoming(), handle) &&
+        incoming().views >= 0 && incoming().views <= 50000 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          incoming().ownerUid == null ||
+          (isVerifiedUser() && incoming().ownerUid == request.auth.uid)
+        );
+
+      // Action-Based Update Pattern with Validation Blueprint wrapper
+      allow update: if isValidHandleId(handle) &&
+        isValidProfile(incoming(), handle) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().handle == existing().handle &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action 1: Admin override
+          (
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'role', 'bio', 'location', 'category',
+              'verified', 'showFollowersCount', 'availabilityText',
+              'avatarUrl', 'bannerUrl', 'socials', 'blocks', 'theme',
+              'views', 'ownerUid', 'updatedAt'
+            ])
+          ) ||
+          // Action 2: Public view counter increment (+1)
+          (
+            incoming().ownerUid == existing().ownerUid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['views', 'updatedAt']) &&
+            incoming().views == existing().views + 1
+          ) ||
+          // Action 3: Public click tracking on existing blocks
+          (
+            incoming().ownerUid == existing().ownerUid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['blocks', 'updatedAt']) &&
+            incoming().blocks.size() == existing().blocks.size() &&
+            (
+              existing().blocks.size() == 0 ||
+              (
+                incoming().blocks[0].id == existing().blocks[0].id &&
+                incoming().blocks[0].type == existing().blocks[0].type &&
+                incoming().blocks[0].title == existing().blocks[0].title
+              )
+            )
+          ) ||
+          // Action 4: Public community editing (unclaimed) or verified owner editing
+          (
+            (
+              (existing().ownerUid == null && incoming().ownerUid == null) ||
+              (existing().ownerUid != null && isVerifiedUser() && existing().ownerUid == request.auth.uid && incoming().ownerUid == existing().ownerUid)
+            ) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'role', 'bio', 'location', 'category',
+              'verified', 'showFollowersCount', 'availabilityText',
+              'avatarUrl', 'bannerUrl', 'socials', 'blocks', 'theme', 'updatedAt'
+            ])
+          ) ||
+          // Action 5: Claim ownership by signed-in verified user
+          (
+            isVerifiedUser() &&
+            existing().ownerUid == null &&
+            incoming().ownerUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isValidHandleId(handle) && (
+        isAdmin() ||
+        existing().ownerUid == null ||
+        (isVerifiedUser() && existing().ownerUid == request.auth.uid)
+      );
+
+      // --- Subcollection: /profiles/{handle}/messages/{messageId} (PII Isolated) ---
+      match /messages/{messageId} {
+        allow get, list: if isValidHandleId(handle) && (
+          isAdmin() ||
+          (isVerifiedUser() && resource.data.profileOwnerUid == request.auth.uid)
+        );
+
+        allow create: if isValidHandleId(handle) &&
+          isValidId(messageId) &&
+          exists(/databases/$(database)/documents/profiles/$(handle)) &&
+          isValidMessage(incoming()) &&
+          incoming().createdAt == request.time &&
+          incoming().profileOwnerUid == get(/databases/$(database)/documents/profiles/$(handle)).data.ownerUid;
+
+        allow delete: if isValidHandleId(handle) && isValidId(messageId) && (
+          isAdmin() ||
+          (isVerifiedUser() && existing().profileOwnerUid == request.auth.uid)
+        );
+      }
+    }
+
+    // --- Collection: /admins/{userId} ---
+    match /admins/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list, write: if false;
+    }
+
+    // --- Connection Check Document ---
+    match /test/connection {
+      allow get: if isSignedIn() || resource == null;
+    }
+  }
+}

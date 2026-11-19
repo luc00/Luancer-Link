@@ -1,0 +1,193 @@
+{
+  "entities": {
+    "BioProfile": {
+      "title": "BioProfile",
+      "description": "Public customizable link-in-bio profile with social links, interactive blocks, and visual theme settings.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Internal profile identifier",
+          "maxLength": 64
+        },
+        "handle": {
+          "type": "string",
+          "description": "Unique lowercase URL handle (e.g. elena.studio)",
+          "minLength": 2,
+          "maxLength": 40,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,38}[a-z0-9]$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public display name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "description": "Headline or role subtitle",
+          "maxLength": 120
+        },
+        "bio": {
+          "type": "string",
+          "description": "Short biography text",
+          "maxLength": 500
+        },
+        "location": {
+          "type": "string",
+          "description": "City or region",
+          "maxLength": 80
+        },
+        "category": {
+          "type": "string",
+          "description": "Creator or business category",
+          "maxLength": 80
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "Display verified badge"
+        },
+        "showFollowersCount": {
+          "type": "boolean",
+          "description": "Display aggregated social followers counter"
+        },
+        "availabilityText": {
+          "type": "string",
+          "description": "Optional status text",
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "Avatar image path, URL, or compressed data URL",
+          "maxLength": 140000
+        },
+        "bannerUrl": {
+          "type": "string",
+          "description": "Banner image path, URL, or compressed data URL",
+          "maxLength": 180000
+        },
+        "views": {
+          "type": "integer",
+          "description": "Public page view counter"
+        },
+        "socials": {
+          "type": "array",
+          "description": "Ordered list of social network links or dividers (max 20); each item may include kind (link | divider), iconImageUrl (maxLength 30000), iconShape (circle | square | rounded), dividerStyle, dividerColor"
+        },
+        "blocks": {
+          "type": "array",
+          "description": "Ordered list of interactive content blocks (max 50), including preview/loop video blocks (videoUrl, videoAspect, videoLoop) and custom divider blocks"
+        },
+        "theme": {
+          "type": "object",
+          "description": "Theme preset and visual customization tokens including optional socialSectionTitle and showSocialLabels"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "Optional Firebase Auth UID locking edits to owner; null for open community editing",
+          "maxLength": 128
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Whether profile is visible in the public community directory and URLs"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-modified timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "handle",
+        "displayName",
+        "role",
+        "bio",
+        "location",
+        "category",
+        "verified",
+        "showFollowersCount",
+        "availabilityText",
+        "avatarUrl",
+        "bannerUrl",
+        "views",
+        "socials",
+        "blocks",
+        "theme",
+        "ownerUid",
+        "isPublic",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ContactSubmission": {
+      "title": "ContactSubmission",
+      "description": "Visitor inquiry or newsletter signup submitted on a public link-in-bio page.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message identifier",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Visitor display name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "senderEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "Visitor contact email (PII)",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "message": {
+          "type": "string",
+          "description": "Inquiry text",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "profileOwnerUid": {
+          "type": "string",
+          "description": "Owner UID copied from parent profile to avoid get() in list queries",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server submission timestamp"
+        }
+      },
+      "required": [
+        "id",
+        "senderName",
+        "senderEmail",
+        "message",
+        "profileOwnerUid",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/profiles/{handle}": {
+      "schema": {
+        "$ref": "#/entities/BioProfile"
+      },
+      "description": "Publicly readable and customizable link-in-bio profiles keyed by normalized handle"
+    },
+    "/profiles/{handle}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ContactSubmission"
+      },
+      "description": "PII-isolated visitor inquiries and newsletter subscriptions for a specific bio profile"
+    }
+  }
+}
