@@ -744,9 +744,7 @@ export function LinkmeLandingView({
 
           <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-400">
             <div className="flex items-center gap-3">
-              <span className="font-studio-display font-bold text-white text-sm">
-                luancer link
-              </span>
+              <LuancerLogo variant="dark" compact />
               <span>© {new Date().getFullYear()}</span>
             </div>
             <div className="flex flex-wrap items-center gap-5">

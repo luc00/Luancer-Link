@@ -28,12 +28,14 @@ import type {
   SocialLinkItem,
 } from '../types/profile';
 import { BlockIcon, SocialIcon } from './SocialIcons';
+import { LuancerLogo } from './LuancerLogo';
 import {
   buildWhatsappUrl,
   calculateTotalFollowers,
   formatFollowerCount,
   getSocialIconShapeClass,
   getSocialIconShapeRadiusClass,
+  isDarkColor,
   normalizeUrl,
   parseVideoUrl,
 } from '../utils/profileLogic';
@@ -237,6 +239,14 @@ export function ProfileRenderer({
     theme.backgroundType === 'image' && theme.backgroundImageUrl
       ? 'rgba(255,255,255,0.78)'
       : theme.mutedTextColor;
+
+  const isDarkFooter =
+    (theme.backgroundType === 'image' && Boolean(theme.backgroundImageUrl)) ||
+    isDarkColor(
+      theme.backgroundType === 'gradient'
+        ? theme.gradientEnd
+        : theme.backgroundColor
+    );
 
   const renderSocialDivider = (divItem: SocialLinkItem) => {
     const lineColor = divItem.dividerColor || theme.borderColor;
@@ -1728,8 +1738,8 @@ export function ProfileRenderer({
         )}
 
         <footer
-          style={{ color: mutedEffective }}
-          className="mt-8 pt-4 border-t border-white/10 text-center text-[11px] flex flex-col items-center gap-3"
+          style={{ color: mutedEffective, borderColor: theme.borderColor }}
+          className="mt-8 pt-5 border-t text-center text-[11px] flex flex-col items-center gap-3"
         >
           {isPublicStandalone && onOpenLanding && (
             <button
@@ -1740,8 +1750,19 @@ export function ProfileRenderer({
               Crea la tua bio gratis su luancer link
             </button>
           )}
-          <div className="flex items-center justify-center gap-2">
-            <span className="font-semibold">luancer link</span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {onOpenLanding ? (
+              <button
+                type="button"
+                onClick={onOpenLanding}
+                aria-label="Luancer and Co."
+                className="inline-flex items-center justify-center cursor-pointer"
+              >
+                <LuancerLogo variant={isDarkFooter ? 'dark' : 'light'} compact />
+              </button>
+            ) : (
+              <LuancerLogo variant={isDarkFooter ? 'dark' : 'light'} compact />
+            )}
             <span aria-hidden="true">·</span>
             <span>@{profile.handle}</span>
           </div>

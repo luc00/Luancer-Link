@@ -22,10 +22,10 @@ export function LuancerLogo({
         src="/assets/aistudio/logo_LUANCER_d035bfad.PNG"
         alt="Luancer and Co."
         draggable={false}
-        className={`${imgClass} max-w-none shrink-0 object-contain transition-opacity ${
+        className={`${imgClass} max-w-none shrink-0 object-contain ${
           variant === 'dark'
-            ? 'brightness-[1.13] contrast-[1.2] invert hue-rotate-180 mix-blend-screen'
-            : 'brightness-[1.13] contrast-[1.18] mix-blend-multiply'
+            ? 'brightness-[1.2] contrast-[1.3] invert hue-rotate-180 mix-blend-screen'
+            : 'brightness-[1.18] contrast-[1.25] mix-blend-multiply'
         }`}
       />
     </span>

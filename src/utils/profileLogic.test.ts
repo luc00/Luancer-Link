@@ -15,6 +15,7 @@ import {
   computeContrastRatio,
   getThemeContrastSummary,
   getSocialIconShapeClass,
+  isDarkColor,
   parseVideoUrl,
 } from './profileLogic';
 import { SEED_PROFILES, THEME_PRESETS } from '../data/presets';
@@ -208,6 +209,13 @@ test('dividers do not inflate activeLinks or activeSocials counts', () => {
     calculateTotalFollowers(withDividers.socials),
     calculateTotalFollowers(base.socials)
   );
+});
+
+test('isDarkColor detects dark forest vs light ivory theme backgrounds', () => {
+  assert.equal(isDarkColor('#0B2214'), true);
+  assert.equal(isDarkColor('#0B0B0F'), true);
+  assert.equal(isDarkColor('#FAF9F7'), false);
+  assert.equal(isDarkColor('#FFFFFF'), false);
 });
 
 
