@@ -76,7 +76,7 @@
         },
         "blocks": {
           "type": "array",
-          "description": "Ordered list of interactive content blocks (max 50), including preview/loop video blocks (videoUrl, videoAspect, videoLoop) and custom divider blocks"
+          "description": "Ordered list of interactive content blocks (max 50), including preview/loop video blocks (videoUrl, videoAspect, videoLoop), custom divider blocks, and optional uploaded iconImageUrl (maxLength 30000) / iconShape (circle | square | rounded)"
         },
         "theme": {
           "type": "object",

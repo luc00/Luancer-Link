@@ -75,14 +75,42 @@ function sanitizeSocials(socials: SocialLinkItem[]): SocialLinkItem[] {
 }
 
 function sanitizeBlocks(blocks: BioBlock[]): BioBlock[] {
-  return (Array.isArray(blocks) ? blocks : []).slice(0, 50).map((b, idx) =>
-    stripUndefined({
-      ...b,
+  return (Array.isArray(blocks) ? blocks : []).slice(0, 50).map((b, idx) => {
+    const cleanIconImg =
+      typeof b.iconImageUrl === 'string' && b.iconImageUrl.trim().length > 0
+        ? clampString(b.iconImageUrl.trim(), 30000)
+        : undefined;
+    const cleanGridItems = Array.isArray(b.gridItems)
+      ? b.gridItems.slice(0, 12).map((g, gIdx) => ({
+          id: clampString(g.id, 64, `g_${idx}_${gIdx}`),
+          title: clampString(g.title, 100, 'Link'),
+          ...(g.subtitle !== undefined ? { subtitle: clampString(g.subtitle, 160) } : {}),
+          url: clampString(g.url, 500, ''),
+          iconName: g.iconName || 'link',
+          ...(typeof g.iconImageUrl === 'string' && g.iconImageUrl.trim().length > 0
+            ? { iconImageUrl: clampString(g.iconImageUrl.trim(), 30000) }
+            : {}),
+          ...(g.iconShape === 'circle' || g.iconShape === 'square' || g.iconShape === 'rounded'
+            ? { iconShape: g.iconShape }
+            : {}),
+          clicks: typeof g.clicks === 'number' && Number.isFinite(g.clicks) ? Math.max(0, Math.round(g.clicks)) : 0,
+        }))
+      : undefined;
+
+    const { iconImageUrl: _ignoredIconImg, iconShape: _ignoredIconShape, ...rest } = b;
+
+    return stripUndefined({
+      ...rest,
       id: clampString(b.id, 64, `blk_${idx}`),
       visible: Boolean(b.visible),
       title: clampString(b.title, 200, b.type === 'divider' ? '' : 'Link'),
       ...(b.subtitle !== undefined ? { subtitle: clampString(b.subtitle, 300) } : {}),
       ...(b.url !== undefined ? { url: clampString(b.url, 500) } : {}),
+      ...(cleanIconImg ? { iconImageUrl: cleanIconImg } : {}),
+      ...(cleanIconImg &&
+      (b.iconShape === 'circle' || b.iconShape === 'square' || b.iconShape === 'rounded')
+        ? { iconShape: b.iconShape }
+        : {}),
       ...(b.badgeText !== undefined ? { badgeText: clampString(b.badgeText, 40) } : {}),
       ...(b.imageUrl !== undefined ? { imageUrl: clampString(b.imageUrl, 30000) } : {}),
       ...(b.videoUrl !== undefined ? { videoUrl: clampString(b.videoUrl, 500) } : {}),
@@ -115,9 +143,10 @@ function sanitizeBlocks(blocks: BioBlock[]): BioBlock[] {
       ...(b.whatsappMessage !== undefined ? { whatsappMessage: clampString(b.whatsappMessage, 300) } : {}),
       ...(b.productPrice !== undefined ? { productPrice: clampString(b.productPrice, 32) } : {}),
       ...(b.productBadge !== undefined ? { productBadge: clampString(b.productBadge, 40) } : {}),
+      ...(cleanGridItems !== undefined ? { gridItems: cleanGridItems } : {}),
       clicks: typeof b.clicks === 'number' && Number.isFinite(b.clicks) ? Math.max(0, Math.round(b.clicks)) : 0,
-    })
-  );
+    });
+  });
 }
 
 function buildEditableFields(profile: BioProfile, cleanHandle: string) {

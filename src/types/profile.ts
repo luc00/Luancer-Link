@@ -86,6 +86,8 @@ export interface QuickGridItem {
   subtitle?: string;
   url: string;
   iconName: BlockIconName;
+  iconImageUrl?: string;
+  iconShape?: SocialIconShape;
   clicks: number;
 }
 
@@ -115,6 +117,8 @@ export interface BioBlock {
   subtitle?: string;
   url?: string;
   iconName?: BlockIconName;
+  iconImageUrl?: string;
+  iconShape?: SocialIconShape;
   badgeText?: string;
   imageUrl?: string;
   highlight?: boolean;

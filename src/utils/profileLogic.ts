@@ -44,8 +44,18 @@ export function normalizeHandle(raw: string): string {
     .replace(/^[._-]+|[._-]+$/g, '');
 }
 
-export function normalizeUrl(raw: string, platform?: SocialPlatformId): string {
+export function sanitizePastedUrl(raw: string): string {
   const trimmed = raw.trim();
+  if (!trimmed) return '';
+  const strayHttp = trimmed.match(/^[a-z0-9"'`(\[{<]{1,3}(https?:\/\/.+)$/i);
+  if (strayHttp) {
+    return strayHttp[1];
+  }
+  return trimmed;
+}
+
+export function normalizeUrl(raw: string, platform?: SocialPlatformId): string {
+  const trimmed = sanitizePastedUrl(raw);
   if (!trimmed) return '';
 
   if (platform === 'email') {
@@ -377,7 +387,14 @@ export function getSocialIconShapeClass(
 }
 
 export interface ParsedVideoInfo {
-  provider: 'youtube' | 'vimeo' | 'direct' | 'external';
+  provider:
+    | 'youtube'
+    | 'vimeo'
+    | 'gdrive'
+    | 'loom'
+    | 'streamable'
+    | 'direct'
+    | 'external';
   embedUrl: string | null;
   thumbnailUrl: string | null;
   directUrl: string | null;
@@ -385,7 +402,7 @@ export interface ParsedVideoInfo {
 }
 
 export function parseVideoUrl(rawUrl: string, loop = false): ParsedVideoInfo {
-  const trimmed = rawUrl.trim();
+  const trimmed = sanitizePastedUrl(rawUrl);
   if (!trimmed) {
     return {
       provider: 'external',
@@ -398,9 +415,9 @@ export function parseVideoUrl(rawUrl: string, loop = false): ParsedVideoInfo {
 
   const normalized = normalizeUrl(trimmed);
 
-  // YouTube (watch, youtu.be, shorts, embed)
+  // YouTube (watch, youtu.be, shorts, embed, live)
   const ytMatch = normalized.match(
-    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+    /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
   if (ytMatch) {
     const id = ytMatch[1];
@@ -432,8 +449,72 @@ export function parseVideoUrl(rawUrl: string, loop = false): ParsedVideoInfo {
     };
   }
 
+  // Google Drive file sharing links (/file/d/<ID>/view, /open?id=<ID>, /uc?id=<ID>)
+  const gdriveMatch = normalized.match(
+    /drive\.google\.com\/(?:file\/d\/|open\?(?:.*&)?id=|uc\?(?:.*&)?id=)([a-zA-Z0-9_-]{15,})/
+  );
+  if (gdriveMatch) {
+    const id = gdriveMatch[1];
+    return {
+      provider: 'gdrive',
+      embedUrl: `https://drive.google.com/file/d/${id}/preview`,
+      thumbnailUrl: `https://drive.google.com/thumbnail?id=${id}&sz=w800`,
+      directUrl: null,
+      isVertical: false,
+    };
+  }
+
+  // Dropbox shared video links -> raw=1 direct HTML5 stream
+  try {
+    const parsedUrl = new URL(normalized);
+    if (
+      /(?:^|\.)dropbox\.com$/i.test(parsedUrl.hostname) &&
+      /^\/(?:s|scl\/fi)\//i.test(parsedUrl.pathname)
+    ) {
+      parsedUrl.searchParams.delete('dl');
+      parsedUrl.searchParams.set('raw', '1');
+      return {
+        provider: 'direct',
+        embedUrl: null,
+        thumbnailUrl: null,
+        directUrl: parsedUrl.toString(),
+        isVertical: false,
+      };
+    }
+  } catch {
+    // Ignore malformed URL parse and continue fallback checks
+  }
+
+  // Loom share/embed links
+  const loomMatch = normalized.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/);
+  if (loomMatch) {
+    const id = loomMatch[1];
+    return {
+      provider: 'loom',
+      embedUrl: `https://www.loom.com/embed/${id}?autoplay=1&hide_owner=true&hide_share=true&hide_title=true`,
+      thumbnailUrl: null,
+      directUrl: null,
+      isVertical: false,
+    };
+  }
+
+  // Streamable links
+  const streamableMatch = normalized.match(/streamable\.com\/(?:e\/)?([a-zA-Z0-9]+)/);
+  if (streamableMatch) {
+    const id = streamableMatch[1];
+    return {
+      provider: 'streamable',
+      embedUrl: loop
+        ? `https://streamable.com/e/${id}?autoplay=1&loop=1&muted=1`
+        : `https://streamable.com/e/${id}?autoplay=1`,
+      thumbnailUrl: null,
+      directUrl: null,
+      isVertical: false,
+    };
+  }
+
   // Direct HTML5 video files
-  if (/\.(mp4|webm|ogg|mov)(?:[?#].*)?$/i.test(normalized)) {
+  if (/\.(mp4|webm|ogg|mov|m4v)(?:[?#].*)?$/i.test(normalized)) {
     return {
       provider: 'direct',
       embedUrl: null,

@@ -12,6 +12,7 @@ import {
   Grid3x3,
   Heading,
   Image as ImageIcon,
+  ImagePlus,
   Link2,
   Mail,
   MessageCircle,
@@ -24,6 +25,7 @@ import {
   Trash2,
   Upload,
   Video,
+  X,
 } from 'lucide-react';
 import type {
   BioBlock,
@@ -33,10 +35,16 @@ import type {
   PhotoGridItem,
   QuickGridItem,
   SocialGridTile,
+  SocialIconShape,
 } from '../types/profile';
 import { BLOCK_ICON_OPTIONS, GENERATED_IMAGES } from '../data/presets';
 import { compressImageFileToDataUrl } from '../utils/imageUpload';
-import { filterBlocks, moveItem } from '../utils/profileLogic';
+import {
+  filterBlocks,
+  moveItem,
+  parseVideoUrl,
+  sanitizePastedUrl,
+} from '../utils/profileLogic';
 import { BlockIcon } from './SocialIcons';
 
 interface EditorBlocksTabProps {
@@ -71,6 +79,8 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
   // Quick-add form state for fast link creation
   const [quickTitle, setQuickTitle] = useState('');
   const [quickUrl, setQuickUrl] = useState('');
+  const [quickIconImageUrl, setQuickIconImageUrl] = useState('');
+  const [quickIconShape, setQuickIconShape] = useState<SocialIconShape>('rounded');
   const [quickError, setQuickError] = useState('');
   const [coverErrorById, setCoverErrorById] = useState<Record<string, string>>({});
 
@@ -294,6 +304,7 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
       return;
     }
     const id = `blk_${Date.now().toString(36)}`;
+    const cleanPhoto = quickIconImageUrl.trim();
     const block: BioBlock = {
       id,
       type: 'link',
@@ -301,6 +312,7 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
       title: quickTitle.trim(),
       url: quickUrl.trim(),
       iconName: 'link',
+      ...(cleanPhoto ? { iconImageUrl: cleanPhoto, iconShape: quickIconShape } : {}),
       clicks: 0,
     };
     onChange((prev) => ({
@@ -309,6 +321,8 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
     }));
     setQuickTitle('');
     setQuickUrl('');
+    setQuickIconImageUrl('');
+    setQuickIconShape('rounded');
     setQuickError('');
     setExpandedId(id);
   };
@@ -514,6 +528,111 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
               <span>Aggiungi</span>
             </button>
           </div>
+          <div className="sm:col-span-12 p-2.5 bg-zinc-50 border border-zinc-200/80 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+              <span
+                className={`w-8 h-8 border border-zinc-200 bg-white overflow-hidden inline-flex items-center justify-center shrink-0 ${
+                  quickIconShape === 'circle'
+                    ? 'rounded-full'
+                    : quickIconShape === 'square'
+                      ? 'rounded-none'
+                      : 'rounded-lg'
+                }`}
+              >
+                {quickIconImageUrl ? (
+                  <img
+                    src={quickIconImageUrl}
+                    alt="Anteprima icona link"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <BlockIcon name="link" className="w-4 h-4 text-zinc-500" />
+                )}
+              </span>
+
+              <label className="px-2.5 py-1.5 text-xs font-medium text-zinc-800 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-100 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0">
+                <ImagePlus className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{quickIconImageUrl ? 'Cambia foto icona' : 'Foto come icona'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  aria-label="Carica foto come icona link rapido"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    try {
+                      const dataUrl = await compressImageFileToDataUrl(file, 160, 20000);
+                      setQuickIconImageUrl(dataUrl);
+                      setQuickError('');
+                    } catch (err) {
+                      setQuickError(
+                        err instanceof Error ? err.message : 'Errore caricamento foto icona.'
+                      );
+                    }
+                  }}
+                  className="sr-only"
+                />
+              </label>
+
+              <input
+                type="text"
+                aria-label="URL foto icona link rapido"
+                value={quickIconImageUrl.startsWith('data:') ? '' : quickIconImageUrl}
+                onChange={(e) => setQuickIconImageUrl(e.target.value)}
+                placeholder={
+                  quickIconImageUrl.startsWith('data:')
+                    ? 'Foto caricata dal dispositivo'
+                    : 'oppure URL foto icona...'
+                }
+                className="flex-1 min-w-[140px] px-2.5 py-1.5 text-xs bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900"
+              />
+
+              {quickIconImageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setQuickIconImageUrl('')}
+                  aria-label="Rimuovi foto icona link rapido"
+                  className="p-1.5 text-zinc-500 hover:text-red-600 bg-white border border-zinc-200 rounded-lg hover:bg-red-50 cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[11px] font-medium text-zinc-600 whitespace-nowrap">
+                Forma:
+              </span>
+              <div
+                role="group"
+                aria-label="Forma foto icona link rapido"
+                className="inline-flex items-center gap-1 p-0.5 bg-zinc-200/70 rounded-lg"
+              >
+                {(
+                  [
+                    { id: 'circle', label: 'Cerchio' },
+                    { id: 'square', label: 'Quadrata' },
+                    { id: 'rounded', label: 'Arrotondati' },
+                  ] as { id: SocialIconShape; label: string }[]
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    aria-pressed={quickIconShape === opt.id}
+                    onClick={() => setQuickIconShape(opt.id)}
+                    className={`px-2 py-1 text-[11px] font-medium rounded-md cursor-pointer whitespace-nowrap ${
+                      quickIconShape === opt.id
+                        ? 'bg-white text-zinc-900 shadow-xs'
+                        : 'text-zinc-600 hover:text-zinc-900'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </form>
         {quickError && (
           <p className="text-xs text-red-600 font-medium">{quickError}</p>
@@ -665,9 +784,27 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                     aria-expanded={isExpanded}
                     className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
                   >
-                    <span className="w-8 h-8 rounded-lg bg-zinc-100 text-zinc-700 inline-flex items-center justify-center shrink-0">
+                    <span
+                      className={`w-8 h-8 bg-zinc-100 text-zinc-700 overflow-hidden inline-flex items-center justify-center shrink-0 ${
+                        block.type === 'link' && block.iconImageUrl
+                          ? block.iconShape === 'circle'
+                            ? 'rounded-full'
+                            : block.iconShape === 'square'
+                              ? 'rounded-none'
+                              : 'rounded-lg'
+                          : 'rounded-lg'
+                      }`}
+                    >
                       {block.type === 'link' ? (
-                        <BlockIcon name={block.iconName} className="w-4 h-4" />
+                        block.iconImageUrl ? (
+                          <img
+                            src={block.iconImageUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <BlockIcon name={block.iconName} className="w-4 h-4" />
+                        )
                       ) : block.type === 'whatsapp' ? (
                         <MessageCircle className="w-4 h-4 text-[#25D366]" aria-hidden="true" />
                       ) : block.type === 'product' ? (
@@ -928,7 +1065,33 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                       </div>
                     )}
 
-                    {block.type === 'video' && (
+                    {block.type === 'video' && (() => {
+                      const rawVideoUrl = block.videoUrl || '';
+                      const parsedVideo = parseVideoUrl(
+                        rawVideoUrl,
+                        Boolean(block.videoLoop)
+                      );
+                      const hasUrl = rawVideoUrl.trim().length > 0;
+                      const statusMessage = !hasUrl
+                        ? 'Supporta YouTube, Shorts, Vimeo, Google Drive ("Chiunque abbia il link"), Dropbox, Loom, Streamable o .mp4/.webm.'
+                        : parsedVideo.provider === 'gdrive'
+                          ? block.videoLoop
+                            ? 'Google Drive rilevato (player incorporato attivo; per il loop continuo automatico usa .mp4, Dropbox, YouTube o Vimeo).'
+                            : 'Google Drive rilevato: assicurati che il file sia condiviso con "Chiunque abbia il link".'
+                          : parsedVideo.provider === 'youtube'
+                            ? 'YouTube rilevato: anteprima e player inline pronti.'
+                            : parsedVideo.provider === 'vimeo'
+                              ? 'Vimeo rilevato: anteprima e player inline pronti.'
+                              : parsedVideo.provider === 'loom' ||
+                                  parsedVideo.provider === 'streamable'
+                                ? 'Player video incorporato pronto.'
+                                : parsedVideo.provider === 'direct'
+                                  ? 'Video diretto rilevato: anteprima, play e loop continuo pronti.'
+                                  : 'Link non incorporabile direttamente: verrà aperto come collegamento esterno.';
+                      const isRecognized =
+                        hasUrl && parsedVideo.provider !== 'external';
+
+                      return (
                       <div className="p-3 bg-white border border-zinc-200 rounded-lg space-y-3">
                         <div className="space-y-1.5">
                           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -936,7 +1099,7 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                               htmlFor={`blk-vurl-${block.id}`}
                               className="text-xs font-medium text-zinc-700"
                             >
-                              URL Video (YouTube, Shorts, Vimeo o link diretto .mp4/.webm)
+                              URL Video (YouTube, Vimeo, Google Drive, Dropbox o .mp4/.webm)
                             </label>
                             <button
                               type="button"
@@ -953,13 +1116,30 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                           <input
                             id={`blk-vurl-${block.id}`}
                             type="text"
-                            value={block.videoUrl || ''}
-                            onChange={(e) =>
-                              updateBlock(block.id, { videoUrl: e.target.value })
-                            }
-                            placeholder="https://youtube.com/watch?v=... oppure https://.../clip.mp4"
+                            value={rawVideoUrl}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const cleaned = /^[a-z0-9"'`(\[{<]{1,3}(https?:\/\/.+)$/i.test(
+                                raw.trim()
+                              )
+                                ? sanitizePastedUrl(raw)
+                                : raw;
+                              updateBlock(block.id, { videoUrl: cleaned });
+                            }}
+                            placeholder="https://youtube.com/watch?v=... oppure https://drive.google.com/file/d/..."
                             className="w-full px-3 py-1.5 text-sm bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:bg-white focus:border-zinc-900"
                           />
+                          <p
+                            className={`text-[11px] ${
+                              !hasUrl
+                                ? 'text-zinc-500'
+                                : isRecognized
+                                  ? 'text-emerald-700 font-medium'
+                                  : 'text-amber-700 font-medium'
+                            }`}
+                          >
+                            {statusMessage}
+                          </p>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1127,7 +1307,8 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                           </p>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     {block.type === 'divider' && (
                       <div className="p-3 bg-white border border-zinc-200 rounded-lg grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -1351,43 +1532,172 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                     )}
 
                     {block.type === 'link' && (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                        <div className="flex items-center gap-2">
-                          <label
-                            htmlFor={`blk-icon-${block.id}`}
-                            className="text-xs font-medium text-zinc-700"
-                          >
-                            Icona:
+                      <div className="space-y-3 pt-1">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <label
+                              htmlFor={`blk-icon-${block.id}`}
+                              className="text-xs font-medium text-zinc-700"
+                            >
+                              Icona predefinita:
+                            </label>
+                            <select
+                              id={`blk-icon-${block.id}`}
+                              value={block.iconName || 'link'}
+                              onChange={(e) =>
+                                updateBlock(block.id, {
+                                  iconName: e.target.value as BlockIconName,
+                                })
+                              }
+                              className="px-2.5 py-1 text-xs bg-white border border-zinc-200 rounded-lg"
+                            >
+                              {BLOCK_ICON_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <label className="inline-flex items-center gap-2 text-xs font-medium text-zinc-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(block.highlight)}
+                              onChange={(e) =>
+                                updateBlock(block.id, { highlight: e.target.checked })
+                              }
+                              className="w-4 h-4 accent-blue-600 rounded"
+                            />
+                            <span>Metti in risalto (colore accento)</span>
                           </label>
-                          <select
-                            id={`blk-icon-${block.id}`}
-                            value={block.iconName || 'link'}
-                            onChange={(e) =>
-                              updateBlock(block.id, {
-                                iconName: e.target.value as BlockIconName,
-                              })
-                            }
-                            className="px-2.5 py-1 text-xs bg-white border border-zinc-200 rounded-lg"
-                          >
-                            {BLOCK_ICON_OPTIONS.map((opt) => (
-                              <option key={opt.id} value={opt.id}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
                         </div>
 
-                        <label className="inline-flex items-center gap-2 text-xs font-medium text-zinc-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(block.highlight)}
-                            onChange={(e) =>
-                              updateBlock(block.id, { highlight: e.target.checked })
-                            }
-                            className="w-4 h-4 accent-blue-600 rounded"
-                          />
-                          <span>Metti in risalto (colore accento)</span>
-                        </label>
+                        <div className="p-2.5 bg-white border border-zinc-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                            <span
+                              className={`w-8 h-8 border border-zinc-200 bg-zinc-50 overflow-hidden inline-flex items-center justify-center shrink-0 ${
+                                block.iconShape === 'circle'
+                                  ? 'rounded-full'
+                                  : block.iconShape === 'square'
+                                    ? 'rounded-none'
+                                    : 'rounded-lg'
+                              }`}
+                            >
+                              {block.iconImageUrl ? (
+                                <img
+                                  src={block.iconImageUrl}
+                                  alt={`Foto icona ${block.title}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <BlockIcon name={block.iconName} className="w-4 h-4 text-zinc-600" />
+                              )}
+                            </span>
+
+                            <label className="px-2.5 py-1.5 text-xs font-medium text-zinc-800 bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0">
+                              <ImagePlus className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>{block.iconImageUrl ? 'Cambia foto icona' : 'Foto come icona'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                aria-label={`Carica foto icona per ${block.title}`}
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  e.target.value = '';
+                                  if (!file) return;
+                                  try {
+                                    const dataUrl = await compressImageFileToDataUrl(file, 160, 20000);
+                                    updateBlock(block.id, {
+                                      iconImageUrl: dataUrl,
+                                      iconShape: block.iconShape || 'rounded',
+                                    });
+                                    setCoverErrorById((prev) => ({
+                                      ...prev,
+                                      [block.id]: '',
+                                    }));
+                                  } catch (err) {
+                                    setCoverErrorById((prev) => ({
+                                      ...prev,
+                                      [block.id]:
+                                        err instanceof Error ? err.message : 'Errore foto icona',
+                                    }));
+                                  }
+                                }}
+                                className="sr-only"
+                              />
+                            </label>
+
+                            <input
+                              type="text"
+                              aria-label={`URL foto icona per ${block.title}`}
+                              value={
+                                block.iconImageUrl?.startsWith('data:')
+                                  ? ''
+                                  : block.iconImageUrl || ''
+                              }
+                              onChange={(e) =>
+                                updateBlock(block.id, {
+                                  iconImageUrl: e.target.value,
+                                  iconShape: block.iconShape || 'rounded',
+                                })
+                              }
+                              placeholder={
+                                block.iconImageUrl?.startsWith('data:')
+                                  ? 'Foto caricata dal dispositivo'
+                                  : 'oppure URL immagine...'
+                              }
+                              className="flex-1 min-w-[120px] px-2.5 py-1 text-xs bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:bg-white focus:border-zinc-900"
+                            />
+
+                            {block.iconImageUrl && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateBlock(block.id, { iconImageUrl: undefined })
+                                }
+                                aria-label={`Rimuovi foto icona per ${block.title}`}
+                                className="p-1 text-zinc-400 hover:text-red-600 rounded hover:bg-red-50 cursor-pointer shrink-0"
+                              >
+                                <X className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 p-0.5 bg-zinc-100 rounded-lg shrink-0">
+                            {(
+                              [
+                                { id: 'circle', label: 'Cerchio' },
+                                { id: 'square', label: 'Quadrata' },
+                                { id: 'rounded', label: 'Arrotondati' },
+                              ] as { id: SocialIconShape; label: string }[]
+                            ).map((opt) => {
+                              const activeShape = block.iconShape || 'rounded';
+                              return (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  aria-pressed={activeShape === opt.id}
+                                  onClick={() =>
+                                    updateBlock(block.id, { iconShape: opt.id })
+                                  }
+                                  className={`px-2 py-1 text-[11px] font-medium rounded-md cursor-pointer whitespace-nowrap ${
+                                    activeShape === opt.id
+                                      ? 'bg-white text-zinc-900 shadow-xs'
+                                      : 'text-zinc-600 hover:text-zinc-900'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {coverErrorById[block.id] && (
+                          <p className="text-xs text-red-600 font-medium">
+                            {coverErrorById[block.id]}
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -1590,6 +1900,79 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                                     </option>
                                   ))}
                                 </select>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-100">
+                                <span
+                                  className={`w-6 h-6 border border-zinc-200 bg-zinc-50 overflow-hidden inline-flex items-center justify-center shrink-0 ${
+                                    tile.iconShape === 'circle'
+                                      ? 'rounded-full'
+                                      : tile.iconShape === 'square'
+                                        ? 'rounded-none'
+                                        : 'rounded-md'
+                                  }`}
+                                >
+                                  {tile.iconImageUrl ? (
+                                    <img
+                                      src={tile.iconImageUrl}
+                                      alt=""
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <BlockIcon name={tile.iconName} className="w-3.5 h-3.5 text-zinc-500" />
+                                  )}
+                                </span>
+                                <label className="px-2 py-1 text-[11px] font-medium text-zinc-700 bg-zinc-50 border border-zinc-200 rounded hover:bg-zinc-100 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap">
+                                  <ImagePlus className="w-3 h-3" aria-hidden="true" />
+                                  <span>{tile.iconImageUrl ? 'Cambia foto' : 'Foto icona'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    aria-label={`Carica foto icona per ${tile.title}`}
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      e.target.value = '';
+                                      if (!file) return;
+                                      try {
+                                        const dataUrl = await compressImageFileToDataUrl(file, 160, 18000);
+                                        updateGridItem(block.id, tile.id, {
+                                          iconImageUrl: dataUrl,
+                                          iconShape: tile.iconShape || 'rounded',
+                                        });
+                                      } catch {
+                                        // Ignore invalid image files cleanly
+                                      }
+                                    }}
+                                    className="sr-only"
+                                  />
+                                </label>
+                                <select
+                                  aria-label={`Forma foto icona per ${tile.title}`}
+                                  value={tile.iconShape || 'rounded'}
+                                  onChange={(e) =>
+                                    updateGridItem(block.id, tile.id, {
+                                      iconShape: e.target.value as SocialIconShape,
+                                    })
+                                  }
+                                  className="px-1.5 py-1 text-[11px] border border-zinc-200 rounded bg-white"
+                                >
+                                  <option value="rounded">Arrotondati</option>
+                                  <option value="circle">Cerchio</option>
+                                  <option value="square">Quadrata</option>
+                                </select>
+                                {tile.iconImageUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateGridItem(block.id, tile.id, {
+                                        iconImageUrl: undefined,
+                                      })
+                                    }
+                                    aria-label={`Rimuovi foto icona per ${tile.title}`}
+                                    className="p-1 text-zinc-400 hover:text-red-600 rounded hover:bg-red-50 cursor-pointer ml-auto"
+                                  >
+                                    <X className="w-3 h-3" aria-hidden="true" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}

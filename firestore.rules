@@ -70,7 +70,9 @@ service cloud.firestore {
             blocks[0].visible is bool &&
             blocks[0].title is string && blocks[0].title.size() <= 200 &&
             (!('videoUrl' in blocks[0]) || (blocks[0].videoUrl is string && blocks[0].videoUrl.size() <= 500)) &&
-            (!('imageUrl' in blocks[0]) || (blocks[0].imageUrl is string && blocks[0].imageUrl.size() <= 30000))
+            (!('imageUrl' in blocks[0]) || (blocks[0].imageUrl is string && blocks[0].imageUrl.size() <= 30000)) &&
+            (!('iconImageUrl' in blocks[0]) || (blocks[0].iconImageUrl is string && blocks[0].iconImageUrl.size() <= 30000)) &&
+            (!('iconShape' in blocks[0]) || blocks[0].iconShape in ['circle', 'square', 'rounded'])
           )
         );
     }

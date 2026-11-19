@@ -166,6 +166,8 @@ export function ProfileRenderer({
   const [playingBlockId, setPlayingBlockId] = useState<string | null>(null);
   const [activeVideoIds, setActiveVideoIds] = useState<Record<string, boolean>>({});
   const [mutedLoopVideos, setMutedLoopVideos] = useState<Record<string, boolean>>({});
+  const [failedPosterIds, setFailedPosterIds] = useState<Record<string, boolean>>({});
+  const [failedVideoIds, setFailedVideoIds] = useState<Record<string, boolean>>({});
   const [mediaProgress, setMediaProgress] = useState<Record<string, number>>({});
   const [contactForms, setContactForms] = useState<
     Record<string, { name: string; email: string; note: string; sent: boolean; error: string }>
@@ -887,7 +889,12 @@ export function ProfileRenderer({
                   aspect === '9:16'
                     ? 'aspect-[9/16] max-w-[260px] mx-auto w-full'
                     : 'aspect-video w-full';
-                const poster = block.imageUrl || parsed.thumbnailUrl || '';
+                const rawPoster = block.imageUrl || parsed.thumbnailUrl || '';
+                const posterKey = `${block.id}:${rawPoster}`;
+                const poster =
+                  rawPoster && !failedPosterIds[posterKey] ? rawPoster : '';
+                const videoKey = `${block.id}:${parsed.directUrl || ''}`;
+                const directVideoFailed = Boolean(failedVideoIds[videoKey]);
                 const isPlayingInline = Boolean(activeVideoIds[block.id]);
                 const isMutedLoop = mutedLoopVideos[block.id] ?? true;
                 const externalHref = normalizeUrl(
@@ -904,7 +911,7 @@ export function ProfileRenderer({
                       className={`relative bg-black overflow-hidden ${aspectClass}`}
                     >
                       {isLoop ? (
-                        parsed.provider === 'direct' && parsed.directUrl ? (
+                        parsed.provider === 'direct' && parsed.directUrl && !directVideoFailed ? (
                           <>
                             <video
                               src={parsed.directUrl}
@@ -914,6 +921,12 @@ export function ProfileRenderer({
                               muted={isMutedLoop}
                               playsInline
                               preload="metadata"
+                              onError={() =>
+                                setFailedVideoIds((prev) => ({
+                                  ...prev,
+                                  [videoKey]: true,
+                                }))
+                              }
                               className="w-full h-full object-cover"
                             />
                             <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-sm border border-white/15 text-[10px] font-semibold text-white inline-flex items-center gap-1">
@@ -946,28 +959,37 @@ export function ProfileRenderer({
                           <iframe
                             src={parsed.embedUrl}
                             title={block.title || 'Video in loop'}
-                            allow="autoplay; encrypted-media; picture-in-picture"
-                            allowFullScreen
+                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                             className="w-full h-full border-0"
                           />
                         ) : (
-                          <div className="w-full h-full relative flex items-center justify-center bg-zinc-900">
+                          <div className="w-full h-full relative flex items-center justify-center bg-zinc-900 px-4 text-center">
                             {poster && (
                               <img
                                 src={poster}
                                 alt={block.title}
                                 referrerPolicy="no-referrer"
+                                onError={() =>
+                                  setFailedPosterIds((prev) => ({
+                                    ...prev,
+                                    [posterKey]: true,
+                                  }))
+                                }
                                 className="w-full h-full object-cover opacity-80"
                               />
                             )}
-                            <span className="absolute px-3 py-1.5 rounded-full bg-black/65 text-white text-xs font-medium inline-flex items-center gap-1.5">
-                              <Repeat className="w-3.5 h-3.5" aria-hidden="true" />
-                              <span>Inserisci URL video .mp4, YouTube o Vimeo</span>
+                            <span className="relative z-10 px-3 py-1.5 rounded-full bg-black/70 text-white text-xs font-medium inline-flex items-center gap-1.5">
+                              <Repeat className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                              <span>
+                                {directVideoFailed
+                                  ? 'Impossibile caricare il video diretto'
+                                  : 'Inserisci URL video YouTube, Drive, Vimeo o .mp4'}
+                              </span>
                             </span>
                           </div>
                         )
                       ) : isPlayingInline &&
-                        (parsed.directUrl || parsed.embedUrl) ? (
+                        ((parsed.directUrl && !directVideoFailed) || parsed.embedUrl) ? (
                         <>
                           {parsed.provider === 'direct' && parsed.directUrl ? (
                             <video
@@ -976,14 +998,19 @@ export function ProfileRenderer({
                               controls
                               autoPlay
                               playsInline
+                              onError={() =>
+                                setFailedVideoIds((prev) => ({
+                                  ...prev,
+                                  [videoKey]: true,
+                                }))
+                              }
                               className="w-full h-full object-cover"
                             />
                           ) : (
                             <iframe
                               src={parsed.embedUrl || undefined}
                               title={block.title || 'Anteprima video'}
-                              allow="autoplay; encrypted-media; picture-in-picture"
-                              allowFullScreen
+                              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                               className="w-full h-full border-0"
                             />
                           )}
@@ -1008,7 +1035,29 @@ export function ProfileRenderer({
                               src={poster}
                               alt={block.title}
                               referrerPolicy="no-referrer"
+                              onError={() =>
+                                setFailedPosterIds((prev) => ({
+                                  ...prev,
+                                  [posterKey]: true,
+                                }))
+                              }
                               className="w-full h-full object-cover"
+                            />
+                          ) : parsed.provider === 'direct' &&
+                            parsed.directUrl &&
+                            !directVideoFailed ? (
+                            <video
+                              src={parsed.directUrl}
+                              preload="metadata"
+                              muted
+                              playsInline
+                              onError={() =>
+                                setFailedVideoIds((prev) => ({
+                                  ...prev,
+                                  [videoKey]: true,
+                                }))
+                              }
+                              className="w-full h-full object-cover pointer-events-none"
                             />
                           ) : (
                             <div
@@ -1032,7 +1081,7 @@ export function ProfileRenderer({
                               {block.mediaDuration}
                             </span>
                           )}
-                          {parsed.directUrl || parsed.embedUrl ? (
+                          {(parsed.directUrl && !directVideoFailed) || parsed.embedUrl ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -1281,13 +1330,32 @@ export function ProfileRenderer({
                           >
                             <div className="flex items-center justify-between">
                               <span
-                                style={{
-                                  backgroundColor: `${theme.accentColor}20`,
-                                  color: theme.accentColor,
-                                }}
-                                className="w-8 h-8 rounded-lg inline-flex items-center justify-center"
+                                style={
+                                  tile.iconImageUrl
+                                    ? { border: `1px solid ${theme.borderColor}` }
+                                    : {
+                                        backgroundColor: `${theme.accentColor}20`,
+                                        color: theme.accentColor,
+                                      }
+                                }
+                                className={`w-8 h-8 overflow-hidden inline-flex items-center justify-center shrink-0 ${
+                                  tile.iconShape === 'circle'
+                                    ? 'rounded-full'
+                                    : tile.iconShape === 'square'
+                                      ? 'rounded-none'
+                                      : 'rounded-lg'
+                                }`}
                               >
-                                <BlockIcon name={tile.iconName} className="w-4 h-4" />
+                                {tile.iconImageUrl ? (
+                                  <img
+                                    src={tile.iconImageUrl}
+                                    alt=""
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <BlockIcon name={tile.iconName} className="w-4 h-4" />
+                                )}
                               </span>
                               <ArrowUpRight className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
                             </div>
@@ -1598,15 +1666,34 @@ export function ProfileRenderer({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
-                      style={{
-                        backgroundColor: isHighlighted
-                          ? 'rgba(255,255,255,0.2)'
-                          : `${theme.textColor}14`,
-                        color: isHighlighted ? theme.accentTextColor : theme.textColor,
-                      }}
-                      className="w-10 h-10 rounded-xl inline-flex items-center justify-center shrink-0"
+                      style={
+                        block.iconImageUrl
+                          ? { border: `1px solid ${theme.borderColor}` }
+                          : {
+                              backgroundColor: isHighlighted
+                                ? 'rgba(255,255,255,0.2)'
+                                : `${theme.textColor}14`,
+                              color: isHighlighted ? theme.accentTextColor : theme.textColor,
+                            }
+                      }
+                      className={`w-10 h-10 overflow-hidden inline-flex items-center justify-center shrink-0 ${
+                        block.iconShape === 'circle'
+                          ? 'rounded-full'
+                          : block.iconShape === 'square'
+                            ? 'rounded-none'
+                            : 'rounded-xl'
+                      }`}
                     >
-                      <BlockIcon name={block.iconName} className="w-[18px] h-[18px]" />
+                      {block.iconImageUrl ? (
+                        <img
+                          src={block.iconImageUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <BlockIcon name={block.iconName} className="w-[18px] h-[18px]" />
+                      )}
                     </span>
                     <div className="min-w-0 text-left">
                       <div className="flex items-center gap-2">

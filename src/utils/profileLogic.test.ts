@@ -145,6 +145,29 @@ test('parseVideoUrl detects YouTube, Shorts, Vimeo, direct MP4, loop embeds, and
   assert.equal(mp4.provider, 'direct');
   assert.equal(mp4.directUrl, 'https://cdn.example.com/clip.mp4?v=1');
 
+  const gdrive = parseVideoUrl(
+    'Vhttps://drive.google.com/file/d/1QwPnihPaTl3IBJjopJvqHU_7eabadfO1/view?usp=sharing'
+  );
+  assert.equal(gdrive.provider, 'gdrive');
+  assert.equal(
+    gdrive.embedUrl,
+    'https://drive.google.com/file/d/1QwPnihPaTl3IBJjopJvqHU_7eabadfO1/preview'
+  );
+  assert.equal(
+    gdrive.thumbnailUrl,
+    'https://drive.google.com/thumbnail?id=1QwPnihPaTl3IBJjopJvqHU_7eabadfO1&sz=w800'
+  );
+
+  const dropbox = parseVideoUrl(
+    'https://www.dropbox.com/scl/fi/abc123/demo.mp4?rlkey=xyz&dl=0'
+  );
+  assert.equal(dropbox.provider, 'direct');
+  assert.match(dropbox.directUrl || '', /raw=1/);
+
+  const loom = parseVideoUrl('https://www.loom.com/share/1234567890abcdef');
+  assert.equal(loom.provider, 'loom');
+  assert.match(loom.embedUrl || '', /loom\.com\/embed\/1234567890abcdef/);
+
   const reel = parseVideoUrl('https://instagram.com/reel/abc123/');
   assert.equal(reel.provider, 'external');
   assert.equal(reel.isVertical, true);
