@@ -97,7 +97,42 @@ function sanitizeBlocks(blocks: BioBlock[]): BioBlock[] {
         }))
       : undefined;
 
-    const { iconImageUrl: _ignoredIconImg, iconShape: _ignoredIconShape, ...rest } = b;
+    const cleanPhotoGridItems = Array.isArray(b.photoGridItems)
+      ? b.photoGridItems.slice(0, 6).map((p, pIdx) => ({
+          id: clampString(p.id, 64, `pg_${idx}_${pIdx}`),
+          title: clampString(p.title, 120, 'Foto'),
+          url: clampString(p.url, 500, ''),
+          imageUrl: clampString(p.imageUrl, 30000, ''),
+          clicks:
+            typeof p.clicks === 'number' && Number.isFinite(p.clicks)
+              ? Math.max(0, Math.round(p.clicks))
+              : 0,
+        }))
+      : undefined;
+    const cleanSocialGridItems = Array.isArray(b.socialGridItems)
+      ? b.socialGridItems.slice(0, 12).map((s, sIdx) => ({
+          id: clampString(s.id, 64, `sg_${idx}_${sIdx}`),
+          caption: clampString(s.caption, 140, ''),
+          url: clampString(s.url, 500, ''),
+          imageUrl: clampString(s.imageUrl, 30000, ''),
+          mediaKind:
+            s.mediaKind === 'video' || s.mediaKind === 'carousel'
+              ? s.mediaKind
+              : ('image' as const),
+          clicks:
+            typeof s.clicks === 'number' && Number.isFinite(s.clicks)
+              ? Math.max(0, Math.round(s.clicks))
+              : 0,
+        }))
+      : undefined;
+
+    const {
+      iconImageUrl: _ignoredIconImg,
+      iconShape: _ignoredIconShape,
+      photoGridItems: _ignoredPhotoGrid,
+      socialGridItems: _ignoredSocialGrid,
+      ...rest
+    } = b;
 
     return stripUndefined({
       ...rest,
@@ -144,6 +179,8 @@ function sanitizeBlocks(blocks: BioBlock[]): BioBlock[] {
       ...(b.productPrice !== undefined ? { productPrice: clampString(b.productPrice, 32) } : {}),
       ...(b.productBadge !== undefined ? { productBadge: clampString(b.productBadge, 40) } : {}),
       ...(cleanGridItems !== undefined ? { gridItems: cleanGridItems } : {}),
+      ...(cleanPhotoGridItems !== undefined ? { photoGridItems: cleanPhotoGridItems } : {}),
+      ...(cleanSocialGridItems !== undefined ? { socialGridItems: cleanSocialGridItems } : {}),
       clicks: typeof b.clicks === 'number' && Number.isFinite(b.clicks) ? Math.max(0, Math.round(b.clicks)) : 0,
     });
   });

@@ -808,9 +808,25 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                       ) : block.type === 'whatsapp' ? (
                         <MessageCircle className="w-4 h-4 text-[#25D366]" aria-hidden="true" />
                       ) : block.type === 'product' ? (
-                        <ShoppingBag className="w-4 h-4 text-[#635BFF]" aria-hidden="true" />
+                        block.imageUrl ? (
+                          <img
+                            src={block.imageUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ShoppingBag className="w-4 h-4 text-[#635BFF]" aria-hidden="true" />
+                        )
                       ) : block.type === 'featured' ? (
-                        <ImageIcon className="w-4 h-4" aria-hidden="true" />
+                        block.imageUrl ? (
+                          <img
+                            src={block.imageUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ImageIcon className="w-4 h-4" aria-hidden="true" />
+                        )
                       ) : block.type === 'photo_grid' ? (
                         <Columns2 className="w-4 h-4" aria-hidden="true" />
                       ) : block.type === 'social_grid' ? (
@@ -1021,47 +1037,101 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                     )}
 
                     {block.type === 'product' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label
-                            htmlFor={`blk-price-${block.id}`}
-                            className="block text-xs font-medium text-zinc-700 mb-1"
-                          >
-                            Prezzo Prodotto
-                          </label>
-                          <input
-                            id={`blk-price-${block.id}`}
-                            type="text"
-                            value={block.productPrice || ''}
-                            onChange={(e) =>
-                              updateBlock(block.id, {
-                                productPrice: e.target.value,
-                              })
-                            }
-                            placeholder="€ 29,00"
-                            className="w-full px-3 py-1.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900 tabular-nums"
-                          />
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                          <div>
+                            <label
+                              htmlFor={`blk-price-${block.id}`}
+                              className="block text-xs font-medium text-zinc-700 mb-1"
+                            >
+                              Prezzo Prodotto
+                            </label>
+                            <input
+                              id={`blk-price-${block.id}`}
+                              type="text"
+                              value={block.productPrice || ''}
+                              onChange={(e) =>
+                                updateBlock(block.id, {
+                                  productPrice: e.target.value,
+                                })
+                              }
+                              placeholder="€ 29,00"
+                              className="w-full px-3 py-1.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900 tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-xs font-medium text-zinc-700 mb-1">
+                              Foto Prodotto
+                            </span>
+                            <div className="flex items-center gap-2 px-2 py-1 bg-white border border-zinc-200 rounded-lg">
+                              <span className="w-7 h-7 rounded-md border border-zinc-200 bg-zinc-50 overflow-hidden inline-flex items-center justify-center shrink-0">
+                                {block.imageUrl ? (
+                                  <img
+                                    src={block.imageUrl}
+                                    alt={`Foto ${block.title}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <ShoppingBag className="w-3.5 h-3.5 text-zinc-400" aria-hidden="true" />
+                                )}
+                              </span>
+                              <label className="px-2.5 py-1 text-xs font-medium text-zinc-800 bg-zinc-50 border border-zinc-200 rounded-md hover:bg-zinc-100 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0">
+                                <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>{block.imageUrl ? 'Cambia immagine' : 'Carica immagine'}</span>
+                                <input
+                                  id={`blk-prodimg-${block.id}`}
+                                  type="file"
+                                  accept="image/*"
+                                  aria-label={`Carica foto prodotto per ${block.title}`}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (!file) return;
+                                    try {
+                                      const dataUrl = await compressImageFileToDataUrl(
+                                        file,
+                                        480,
+                                        28000
+                                      );
+                                      updateBlock(block.id, { imageUrl: dataUrl });
+                                      setCoverErrorById((prev) => ({
+                                        ...prev,
+                                        [block.id]: '',
+                                      }));
+                                    } catch (err) {
+                                      setCoverErrorById((prev) => ({
+                                        ...prev,
+                                        [block.id]:
+                                          err instanceof Error
+                                            ? err.message
+                                            : 'Errore caricamento immagine prodotto.',
+                                      }));
+                                    }
+                                  }}
+                                  className="sr-only"
+                                />
+                              </label>
+                              <span className="text-[11px] text-zinc-500 truncate flex-1 min-w-0">
+                                {block.imageUrl ? 'Immagine caricata' : 'PNG, JPG o WebP'}
+                              </span>
+                              {block.imageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock(block.id, { imageUrl: '' })}
+                                  aria-label={`Rimuovi foto prodotto per ${block.title}`}
+                                  className="p-1 text-zinc-400 hover:text-red-600 rounded hover:bg-red-50 cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <label
-                            htmlFor={`blk-prodimg-${block.id}`}
-                            className="block text-xs font-medium text-zinc-700 mb-1"
-                          >
-                            Foto Prodotto (URL)
-                          </label>
-                          <input
-                            id={`blk-prodimg-${block.id}`}
-                            type="text"
-                            value={block.imageUrl || ''}
-                            onChange={(e) =>
-                              updateBlock(block.id, {
-                                imageUrl: e.target.value,
-                              })
-                            }
-                            placeholder="/src/assets/..."
-                            className="w-full px-3 py-1.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900"
-                          />
-                        </div>
+                        {coverErrorById[block.id] && (
+                          <p className="text-xs text-red-600 font-medium">
+                            {coverErrorById[block.id]}
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -1469,17 +1539,89 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                               htmlFor={`blk-img-${block.id}`}
                               className="block text-xs font-medium text-zinc-700 mb-1"
                             >
-                              Immagine Card (URL)
+                              Immagine Card
                             </label>
-                            <input
-                              id={`blk-img-${block.id}`}
-                              type="text"
-                              value={block.imageUrl || ''}
-                              onChange={(e) =>
-                                updateBlock(block.id, { imageUrl: e.target.value })
-                              }
-                              className="w-full px-3 py-1.5 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900"
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-8 h-8 rounded-lg border border-zinc-200 bg-white overflow-hidden inline-flex items-center justify-center shrink-0">
+                                {block.imageUrl ? (
+                                  <img
+                                    src={block.imageUrl}
+                                    alt={`Anteprima ${block.title}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <ImageIcon className="w-3.5 h-3.5 text-zinc-400" aria-hidden="true" />
+                                )}
+                              </span>
+                              <label className="px-2.5 py-1.5 text-xs font-medium text-zinc-800 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-100 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0">
+                                <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>{block.imageUrl ? 'Cambia' : 'Carica'}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  aria-label={`Carica immagine banner per ${block.title}`}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (!file) return;
+                                    try {
+                                      const dataUrl = await compressImageFileToDataUrl(
+                                        file,
+                                        480,
+                                        28000
+                                      );
+                                      updateBlock(block.id, { imageUrl: dataUrl });
+                                      setCoverErrorById((prev) => ({
+                                        ...prev,
+                                        [block.id]: '',
+                                      }));
+                                    } catch (err) {
+                                      setCoverErrorById((prev) => ({
+                                        ...prev,
+                                        [block.id]:
+                                          err instanceof Error
+                                            ? err.message
+                                            : 'Errore caricamento immagine.',
+                                      }));
+                                    }
+                                  }}
+                                  className="sr-only"
+                                />
+                              </label>
+                              <input
+                                id={`blk-img-${block.id}`}
+                                type="text"
+                                value={
+                                  block.imageUrl?.startsWith('data:')
+                                    ? ''
+                                    : block.imageUrl || ''
+                                }
+                                onChange={(e) =>
+                                  updateBlock(block.id, { imageUrl: e.target.value })
+                                }
+                                placeholder={
+                                  block.imageUrl?.startsWith('data:')
+                                    ? 'Immagine caricata dal dispositivo'
+                                    : 'oppure URL immagine...'
+                                }
+                                className="flex-1 min-w-0 px-2.5 py-1.5 text-xs bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900"
+                              />
+                              {block.imageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock(block.id, { imageUrl: '' })}
+                                  aria-label={`Rimuovi immagine per ${block.title}`}
+                                  className="p-1.5 text-zinc-400 hover:text-red-600 bg-white border border-zinc-200 rounded-lg hover:bg-red-50 cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                            {coverErrorById[block.id] && (
+                              <p className="text-xs text-red-600 font-medium mt-1">
+                                {coverErrorById[block.id]}
+                              </p>
+                            )}
                           </div>
                         )}
 
@@ -1735,18 +1877,80 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                               placeholder="https://..."
                               className="w-full px-2 py-1 text-xs border border-zinc-200 rounded"
                             />
-                            <input
-                              type="text"
-                              aria-label={`Immagine card foto ${idx + 1}`}
-                              value={item.imageUrl}
-                              onChange={(e) =>
-                                updatePhotoGridItem(block.id, item.id, {
-                                  imageUrl: e.target.value,
-                                })
-                              }
-                              placeholder="URL immagine"
-                              className="w-full px-2 py-1 text-xs border border-zinc-200 rounded"
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-7 h-7 rounded border border-zinc-200 bg-zinc-50 overflow-hidden inline-flex items-center justify-center shrink-0">
+                                {item.imageUrl ? (
+                                  <img
+                                    src={item.imageUrl}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <ImageIcon className="w-3.5 h-3.5 text-zinc-400" aria-hidden="true" />
+                                )}
+                              </span>
+                              <label className="px-2 py-1 text-[11px] font-medium text-zinc-800 bg-zinc-50 border border-zinc-200 rounded hover:bg-zinc-100 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0">
+                                <Upload className="w-3 h-3" aria-hidden="true" />
+                                <span>{item.imageUrl ? 'Cambia' : 'Carica foto'}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  aria-label={`Carica immagine card foto ${idx + 1}`}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (!file) return;
+                                    try {
+                                      const dataUrl = await compressImageFileToDataUrl(
+                                        file,
+                                        380,
+                                        24000
+                                      );
+                                      updatePhotoGridItem(block.id, item.id, {
+                                        imageUrl: dataUrl,
+                                      });
+                                    } catch {
+                                      // Ignore invalid image files cleanly
+                                    }
+                                  }}
+                                  className="sr-only"
+                                />
+                              </label>
+                              <input
+                                type="text"
+                                aria-label={`URL immagine card foto ${idx + 1}`}
+                                value={
+                                  item.imageUrl?.startsWith('data:')
+                                    ? ''
+                                    : item.imageUrl
+                                }
+                                onChange={(e) =>
+                                  updatePhotoGridItem(block.id, item.id, {
+                                    imageUrl: e.target.value,
+                                  })
+                                }
+                                placeholder={
+                                  item.imageUrl?.startsWith('data:')
+                                    ? 'Foto caricata'
+                                    : 'oppure URL...'
+                                }
+                                className="flex-1 min-w-0 px-2 py-1 text-xs border border-zinc-200 rounded"
+                              />
+                              {item.imageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updatePhotoGridItem(block.id, item.id, {
+                                      imageUrl: '',
+                                    })
+                                  }
+                                  aria-label={`Rimuovi immagine card foto ${idx + 1}`}
+                                  className="p-1 text-zinc-400 hover:text-red-600 rounded hover:bg-red-50 cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3 h-3" aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1786,18 +1990,55 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
                               placeholder="https://..."
                               className="w-full px-2 py-1 text-xs border border-zinc-200 rounded"
                             />
-                            <input
-                              type="text"
-                              aria-label={`Immagine riquadro ${idx + 1}`}
-                              value={tile.imageUrl}
-                              onChange={(e) =>
-                                updateSocialGridTile(block.id, tile.id, {
-                                  imageUrl: e.target.value,
-                                })
-                              }
-                              placeholder="URL immagine"
-                              className="w-full px-2 py-1 text-xs border border-zinc-200 rounded"
-                            />
+                            <div className="flex items-center gap-1.5">
+                              <label className="px-2 py-1 text-[11px] font-medium text-zinc-800 bg-zinc-50 border border-zinc-200 rounded hover:bg-zinc-100 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0">
+                                <Upload className="w-3 h-3" aria-hidden="true" />
+                                <span>{tile.imageUrl ? 'Cambia' : 'Carica'}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  aria-label={`Carica immagine riquadro ${idx + 1}`}
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (!file) return;
+                                    try {
+                                      const dataUrl = await compressImageFileToDataUrl(
+                                        file,
+                                        340,
+                                        22000
+                                      );
+                                      updateSocialGridTile(block.id, tile.id, {
+                                        imageUrl: dataUrl,
+                                      });
+                                    } catch {
+                                      // Ignore invalid image files cleanly
+                                    }
+                                  }}
+                                  className="sr-only"
+                                />
+                              </label>
+                              <input
+                                type="text"
+                                aria-label={`URL immagine riquadro ${idx + 1}`}
+                                value={
+                                  tile.imageUrl?.startsWith('data:')
+                                    ? ''
+                                    : tile.imageUrl
+                                }
+                                onChange={(e) =>
+                                  updateSocialGridTile(block.id, tile.id, {
+                                    imageUrl: e.target.value,
+                                  })
+                                }
+                                placeholder={
+                                  tile.imageUrl?.startsWith('data:')
+                                    ? 'Foto caricata'
+                                    : 'oppure URL...'
+                                }
+                                className="flex-1 min-w-0 px-2 py-1 text-xs border border-zinc-200 rounded"
+                              />
+                            </div>
                             <select
                               aria-label={`Tipo media riquadro ${idx + 1}`}
                               value={tile.mediaKind}
