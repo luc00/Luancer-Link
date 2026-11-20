@@ -13,6 +13,9 @@ import {
   buildWhatsappUrl,
   cloneProfileForRemix,
   computeContrastRatio,
+  formatFirestoreSaveError,
+  getChangedEditableFieldKeys,
+  getEditableProfileFingerprint,
   getThemeContrastSummary,
   getSocialIconShapeClass,
   isDarkColor,
@@ -218,5 +221,43 @@ test('isDarkColor detects dark forest vs light ivory theme backgrounds', () => {
   assert.equal(isDarkColor('#FFFFFF'), false);
 });
 
+test('getEditableProfileFingerprint ignores analytics views and formatFirestoreSaveError detects quota and timeout', () => {
+  const base = SEED_PROFILES[0];
+  const withMoreViews = { ...base, views: base.views + 50, updatedAt: '2026-12-01T00:00:00Z' };
+  assert.equal(
+    getEditableProfileFingerprint(base),
+    getEditableProfileFingerprint(withMoreViews)
+  );
 
+  const edited = { ...base, displayName: 'Nuovo Nome' };
+  assert.notEqual(
+    getEditableProfileFingerprint(base),
+    getEditableProfileFingerprint(edited)
+  );
 
+  const quotaErr = formatFirestoreSaveError(
+    new Error('{"error":"[code=resource-exhausted]: Quota limit exceeded."}')
+  );
+  assert.equal(quotaErr.isQuotaExceeded, true);
+  assert.match(quotaErr.message, /Quota giornaliera/);
+
+  const timeoutErr = formatFirestoreSaveError(new Error('CLOUD_SAVE_TIMEOUT'));
+  assert.equal(timeoutErr.isQuotaExceeded, false);
+  assert.match(timeoutErr.message, /timeout/i);
+});
+
+test('getChangedEditableFieldKeys detects only modified fields for fast differential saves', () => {
+  const base = SEED_PROFILES[0];
+  assert.deepEqual(getChangedEditableFieldKeys(base, { ...base }), []);
+
+  const nameOnly = { ...base, displayName: 'Elena Studio' };
+  assert.deepEqual(getChangedEditableFieldKeys(base, nameOnly), ['displayName']);
+
+  const themeAndBio = {
+    ...base,
+    bio: 'Nuova bio',
+    theme: { ...base.theme, accentColor: '#FF0000' },
+  };
+  assert.deepEqual(getChangedEditableFieldKeys(base, themeAndBio), ['bio', 'theme']);
+  assert.equal(getChangedEditableFieldKeys(undefined, base).length, 13);
+});

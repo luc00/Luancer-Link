@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -10,6 +10,7 @@ import {
   EyeOff,
   Grid2x2,
   Grid3x3,
+  GripVertical,
   Heading,
   Image as ImageIcon,
   ImagePlus,
@@ -43,6 +44,7 @@ import {
   filterBlocks,
   moveItem,
   parseVideoUrl,
+  reorderList,
   sanitizePastedUrl,
 } from '../utils/profileLogic';
 import { BlockIcon } from './SocialIcons';
@@ -83,6 +85,40 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
   const [quickIconShape, setQuickIconShape] = useState<SocialIconShape>('rounded');
   const [quickError, setQuickError] = useState('');
   const [coverErrorById, setCoverErrorById] = useState<Record<string, string>>({});
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const draggedBlockIdRef = useRef<string | null>(null);
+  const dragClientYRef = useRef<number | null>(null);
+  const [dropTargetBlock, setDropTargetBlock] = useState<{
+    id: string;
+    position: 'above' | 'below';
+  } | null>(null);
+
+  useEffect(() => {
+    if (!draggedBlockId) {
+      dragClientYRef.current = null;
+      return;
+    }
+    let rafId = 0;
+    const tick = () => {
+      const y = dragClientYRef.current;
+      if (y !== null) {
+        const edge = 110;
+        if (y < edge) {
+          const speed = Math.max(6, Math.round(((edge - y) / edge) * 24));
+          window.scrollBy({ top: -speed, behavior: 'auto' });
+        } else if (y > window.innerHeight - edge) {
+          const speed = Math.max(
+            6,
+            Math.round(((y - (window.innerHeight - edge)) / edge) * 24)
+          );
+          window.scrollBy({ top: speed, behavior: 'auto' });
+        }
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [draggedBlockId]);
 
   const addBlock = (type: BlockType) => {
     const id = `blk_${Date.now().toString(36)}`;
@@ -471,6 +507,26 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
     });
   };
 
+  const reorderBlockById = (
+    sourceId: string,
+    targetId: string,
+    position: 'above' | 'below'
+  ) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+    onChange((prev) => {
+      const fromIdx = prev.blocks.findIndex((b) => b.id === sourceId);
+      const rawTargetIdx = prev.blocks.findIndex((b) => b.id === targetId);
+      if (fromIdx === -1 || rawTargetIdx === -1) return prev;
+      let toIdx = position === 'above' ? rawTargetIdx : rawTargetIdx + 1;
+      if (fromIdx < toIdx) toIdx -= 1;
+      if (fromIdx === toIdx) return prev;
+      return {
+        ...prev,
+        blocks: reorderList(prev.blocks, fromIdx, toIdx),
+      };
+    });
+  };
+
   const visibleList = filterBlocks(profile.blocks, searchQuery);
 
   return (
@@ -734,9 +790,16 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
 
       {/* Search & Count */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-zinc-900">
-          Blocchi e Link ({profile.blocks.length})
-        </h3>
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900">
+            Blocchi e Link ({profile.blocks.length})
+          </h3>
+          {profile.blocks.length > 1 && (
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              Trascina i blocchi con il mouse per riordinarli
+            </p>
+          )}
+        </div>
         <div className="relative w-full sm:w-64">
           <Search
             className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2"
@@ -759,7 +822,14 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
           Nessun blocco trovato. Prova a cambiare ricerca o aggiungi un nuovo link.
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div
+          onDragOver={(e) => {
+            if (!draggedBlockIdRef.current) return;
+            e.preventDefault();
+            dragClientYRef.current = e.clientY;
+          }}
+          className="space-y-2.5"
+        >
           {visibleList.map((block) => {
             const isExpanded = expandedId === block.id;
             const globalIndex = profile.blocks.findIndex((b) => b.id === block.id);
@@ -768,16 +838,93 @@ export function EditorBlocksTab({ profile, onChange }: EditorBlocksTabProps) {
               (block.photoGridItems?.reduce((acc, p) => acc + p.clicks, 0) ?? 0) +
               (block.socialGridItems?.reduce((acc, s) => acc + s.clicks, 0) ?? 0);
             const clickTotal = block.clicks + nestedClicks;
+            const isDragging = draggedBlockId === block.id;
+            const dropPos =
+              dropTargetBlock?.id === block.id ? dropTargetBlock.position : null;
 
             return (
               <div
                 key={block.id}
-                className={`bg-white border border-zinc-200 rounded-xl overflow-hidden transition-opacity ${
-                  !block.visible ? 'opacity-65' : ''
-                }`}
+                data-block-id={block.id}
+                onDragOver={(e) => {
+                  const activeSourceId = draggedBlockIdRef.current || draggedBlockId;
+                  if (!activeSourceId || activeSourceId === block.id) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  dragClientYRef.current = e.clientY;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const position =
+                    e.clientY < rect.top + rect.height / 2 ? 'above' : 'below';
+                  setDropTargetBlock((prev) =>
+                    prev?.id === block.id && prev.position === position
+                      ? prev
+                      : { id: block.id, position }
+                  );
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const sourceId =
+                    draggedBlockIdRef.current ||
+                    draggedBlockId ||
+                    e.dataTransfer.getData('text/plain');
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const position =
+                    dropTargetBlock?.id === block.id
+                      ? dropTargetBlock.position
+                      : e.clientY < rect.top + rect.height / 2
+                        ? 'above'
+                        : 'below';
+                  reorderBlockById(sourceId, block.id, position);
+                  draggedBlockIdRef.current = null;
+                  dragClientYRef.current = null;
+                  setDraggedBlockId(null);
+                  setDropTargetBlock(null);
+                }}
+                className={`relative bg-white border rounded-xl overflow-hidden transition-colors ${
+                  isDragging
+                    ? 'opacity-45 border-zinc-400 shadow-sm'
+                    : dropPos
+                      ? 'border-[#635BFF]/40 shadow-xs'
+                      : 'border-zinc-200'
+                } ${!block.visible && !isDragging ? 'opacity-65' : ''}`}
               >
-                {/* Block Row Header */}
-                <div className="p-3.5 flex items-center justify-between gap-3">
+                {dropPos === 'above' && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute top-0 inset-x-0 h-[3px] bg-[#635BFF] pointer-events-none z-20"
+                  />
+                )}
+                {dropPos === 'below' && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute bottom-0 inset-x-0 h-[3px] bg-[#635BFF] pointer-events-none z-20"
+                  />
+                )}
+
+                {/* Block Row Header (Mouse Drag Handle + Accordion Trigger) */}
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    draggedBlockIdRef.current = block.id;
+                    setDraggedBlockId(block.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', block.id);
+                  }}
+                  onDragEnd={() => {
+                    draggedBlockIdRef.current = null;
+                    dragClientYRef.current = null;
+                    setDraggedBlockId(null);
+                    setDropTargetBlock(null);
+                  }}
+                  className="p-3.5 flex items-center justify-between gap-2.5 cursor-grab active:cursor-grabbing select-none"
+                >
+                  <span
+                    aria-hidden="true"
+                    title="Trascina con il mouse per spostare"
+                    className="text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded p-1 -ml-1 shrink-0 transition-colors"
+                  >
+                    <GripVertical className="w-4 h-4" />
+                  </span>
                   <button
                     type="button"
                     onClick={() => setExpandedId(isExpanded ? null : block.id)}

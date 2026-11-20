@@ -539,4 +539,121 @@ export function parseVideoUrl(rawUrl: string, loop = false): ParsedVideoInfo {
   };
 }
 
+export function getEditableProfileFingerprint(profile: BioProfile): string {
+  return JSON.stringify({
+    handle: normalizeHandle(profile.handle),
+    displayName: profile.displayName,
+    role: profile.role,
+    bio: profile.bio,
+    location: profile.location,
+    category: profile.category,
+    verified: profile.verified,
+    showFollowersCount: profile.showFollowersCount,
+    availabilityText: profile.availabilityText,
+    avatarUrl: profile.avatarUrl,
+    bannerUrl: profile.bannerUrl,
+    socials: profile.socials,
+    blocks: profile.blocks,
+    theme: profile.theme,
+  });
+}
+
+export function formatFirestoreSaveError(err: unknown): {
+  message: string;
+  isQuotaExceeded: boolean;
+} {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  const lower = raw.toLowerCase();
+
+  if (raw.includes('già utilizzato') || raw.includes('già occupato')) {
+    return { message: raw, isQuotaExceeded: false };
+  }
+
+  if (
+    lower.includes('resource-exhausted') ||
+    lower.includes('quota limit exceeded') ||
+    lower.includes('quota exceeded')
+  ) {
+    return {
+      message:
+        'Quota giornaliera gratuita di Firestore esaurita: le modifiche restano salvate in locale su questo browser e la quota cloud si azzera domani.',
+      isQuotaExceeded: true,
+    };
+  }
+
+  if (raw === 'CLOUD_SAVE_TIMEOUT' || lower.includes('cloud_save_timeout')) {
+    return {
+      message:
+        'Salvataggio cloud in timeout (possibile quota giornaliera Firestore esaurita o rete lenta). Le modifiche sono al sicuro in locale.',
+      isQuotaExceeded: false,
+    };
+  }
+
+  if (lower.includes('permission-denied') || lower.includes('missing or insufficient permissions')) {
+    return {
+      message:
+        'Permessi insufficienti per modificare questo profilo su cloud: verifica l’account Google collegato.',
+      isQuotaExceeded: false,
+    };
+  }
+
+  if (
+    lower.includes('exceeds the maximum allowed size') ||
+    lower.includes('document exceeds maximum size') ||
+    lower.includes('invalid-argument')
+  ) {
+    return {
+      message:
+        'Il profilo supera il limite massimo di 1 MB per documento Firestore: prova a rimuovere o ridurre alcune immagini caricate.',
+      isQuotaExceeded: false,
+    };
+  }
+
+  return {
+    message:
+      'Sincronizzazione cloud non riuscita al momento; le modifiche restano salvate su questo browser.',
+    isQuotaExceeded: false,
+  };
+}
+
+export const EDITABLE_PROFILE_FIELD_KEYS = [
+  'displayName',
+  'role',
+  'bio',
+  'location',
+  'category',
+  'verified',
+  'showFollowersCount',
+  'availabilityText',
+  'avatarUrl',
+  'bannerUrl',
+  'socials',
+  'blocks',
+  'theme',
+] as const;
+
+export type EditableProfileFieldKey = (typeof EDITABLE_PROFILE_FIELD_KEYS)[number];
+
+export function getChangedEditableFieldKeys(
+  prev: BioProfile | undefined,
+  next: BioProfile
+): EditableProfileFieldKey[] {
+  if (!prev) {
+    return [...EDITABLE_PROFILE_FIELD_KEYS];
+  }
+  const changed: EditableProfileFieldKey[] = [];
+  for (const key of EDITABLE_PROFILE_FIELD_KEYS) {
+    const a = prev[key];
+    const b = next[key];
+    if (a === b) continue;
+    if (typeof a === 'object' || typeof b === 'object') {
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    }
+    changed.push(key);
+  }
+  return changed;
+}
+
+
+
 

@@ -26,7 +26,13 @@ import type {
   StudioTab,
 } from './types/profile';
 import { SEED_PROFILES, THEME_PRESETS } from './data/presets';
-import { calculateProfileStats, normalizeHandle } from './utils/profileLogic';
+import {
+  calculateProfileStats,
+  formatFirestoreSaveError,
+  getChangedEditableFieldKeys,
+  getEditableProfileFingerprint,
+  normalizeHandle,
+} from './utils/profileLogic';
 import { auth, signInWithGoogle, signOutGoogle } from './firebase';
 import {
   claimProfileOwnershipInFirestore,
@@ -52,6 +58,30 @@ import { LinkmeLandingView } from './components/LinkmeLandingView';
 import { LuancerLogo } from './components/LuancerLogo';
 
 const STORAGE_KEY = 'linkme_profiles_cache_v3';
+const DIRTY_STORAGE_KEY = 'linkme_dirty_profile_ids_v1';
+
+function readStoredDirtyIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DIRTY_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr.filter((x) => typeof x === 'string')) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function writeStoredDirtyIds(ids: Set<string>) {
+  try {
+    if (ids.size === 0) {
+      localStorage.removeItem(DIRTY_STORAGE_KEY);
+    } else {
+      localStorage.setItem(DIRTY_STORAGE_KEY, JSON.stringify([...ids]));
+    }
+  } catch {
+    // ignore storage quota
+  }
+}
 
 function migrateProfileSchema(p: BioProfile): BioProfile {
   return {
@@ -111,7 +141,7 @@ export default function App() {
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('mobile');
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'dirty' | 'error'>('saved');
+  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'dirty' | 'local' | 'error'>('saved');
   const [saveError, setSaveError] = useState('');
   const [isLoadingServer, setIsLoadingServer] = useState(true);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -119,6 +149,12 @@ export default function App() {
   const saveTimerRef = useRef<number | null>(null);
   const lastSavedHandleRef = useRef<string>(activeHandle);
   const isEditingRef = useRef<boolean>(false);
+  const dirtyProfileIdsRef = useRef<Set<string>>(readStoredDirtyIds());
+  const lastSavedFingerprintRef = useRef<Map<string, string>>(new Map());
+  const lastSyncedProfileRef = useRef<Map<string, BioProfile>>(new Map());
+  const savingInFlightRef = useRef<boolean>(false);
+  const queuedSaveRef = useRef<{ profile: BioProfile; handleOverride?: string } | null>(null);
+  const cloudQuotaPausedRef = useRef<boolean>(false);
   const lastIncrementedViewHandleRef = useRef<string>('');
 
   const activeProfile =
@@ -130,6 +166,15 @@ export default function App() {
       setCurrentUser(user);
     });
     return () => unsubAuth();
+  }, []);
+
+  // Cleanup pending autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
   }, []);
 
   // Live Firestore hydration + real-time cross-visitor synchronization
@@ -149,22 +194,40 @@ export default function App() {
             if (cloudProfiles.length > 0) {
               setProfiles((prev) => {
                 const normalized = cloudProfiles.map(migrateProfileSchema);
-                if (isEditingRef.current) {
-                  const localEditing = prev.find((p) => p.handle === lastSavedHandleRef.current);
-                  if (localEditing) {
-                    const existsInCloud = normalized.some((c) => c.id === localEditing.id);
-                    return existsInCloud
-                      ? normalized.map((c) => (c.id === localEditing.id ? localEditing : c))
-                      : [localEditing, ...normalized];
+                for (const cp of normalized) {
+                  if (!dirtyProfileIdsRef.current.has(cp.id)) {
+                    lastSavedFingerprintRef.current.set(
+                      cp.id,
+                      getEditableProfileFingerprint(cp)
+                    );
+                    lastSyncedProfileRef.current.set(cp.id, cp);
                   }
+                }
+                const dirtyIds = dirtyProfileIdsRef.current;
+                if (isEditingRef.current || dirtyIds.size > 0) {
+                  const merged = normalized.map((cloudItem) => {
+                    if (
+                      dirtyIds.has(cloudItem.id) ||
+                      (isEditingRef.current && cloudItem.handle === lastSavedHandleRef.current)
+                    ) {
+                      const localMatch = prev.find((p) => p.id === cloudItem.id);
+                      return localMatch || cloudItem;
+                    }
+                    return cloudItem;
+                  });
+                  for (const localItem of prev) {
+                    if (
+                      (dirtyIds.has(localItem.id) ||
+                        (isEditingRef.current && localItem.handle === lastSavedHandleRef.current)) &&
+                      !merged.some((m) => m.id === localItem.id)
+                    ) {
+                      merged.unshift(localItem);
+                    }
+                  }
+                  return merged;
                 }
                 return normalized;
               });
-              try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudProfiles));
-              } catch {
-                // ignore storage quota
-              }
             }
             setIsLoadingServer(false);
           },
@@ -249,17 +312,64 @@ export default function App() {
   }, [workspace, activeProfile?.handle, activeHandle, isLoadingServer, profiles]);
 
   const persistProfileToServer = useCallback(
-    async (profileToSave: BioProfile, targetHandleOverride?: string) => {
+    async (
+      profileToSave: BioProfile,
+      targetHandleOverride?: string,
+      isManualTrigger = false
+    ) => {
+      if (isManualTrigger) {
+        cloudQuotaPausedRef.current = false;
+      }
+
       const previousHandle =
         targetHandleOverride || lastSavedHandleRef.current || profileToSave.handle;
+      const fingerprint = getEditableProfileFingerprint(profileToSave);
+
+      if (
+        !isManualTrigger &&
+        previousHandle === profileToSave.handle &&
+        lastSavedFingerprintRef.current.get(profileToSave.id) === fingerprint &&
+        !dirtyProfileIdsRef.current.has(profileToSave.id)
+      ) {
+        isEditingRef.current = false;
+        setSaveState('saved');
+        return true;
+      }
+
+      if (savingInFlightRef.current) {
+        queuedSaveRef.current = {
+          profile: profileToSave,
+          handleOverride: previousHandle,
+        };
+        return false;
+      }
+
+      const changedKeys =
+        previousHandle === profileToSave.handle
+          ? getChangedEditableFieldKeys(
+              lastSyncedProfileRef.current.get(profileToSave.id),
+              profileToSave
+            )
+          : undefined;
+
+      savingInFlightRef.current = true;
       setSaveState('saving');
       setSaveError('');
       try {
         const saved = await saveProfileToFirestore(
           profileToSave,
           previousHandle,
-          currentUser?.emailVerified ? currentUser.uid : null
+          currentUser?.emailVerified ? currentUser.uid : null,
+          changedKeys
         );
+        lastSavedFingerprintRef.current.set(
+          profileToSave.id,
+          getEditableProfileFingerprint(profileToSave)
+        );
+        lastSyncedProfileRef.current.set(profileToSave.id, profileToSave);
+        dirtyProfileIdsRef.current.delete(profileToSave.id);
+        writeStoredDirtyIds(dirtyProfileIdsRef.current);
+        cloudQuotaPausedRef.current = false;
         isEditingRef.current = false;
         lastSavedHandleRef.current = saved.handle;
         setActiveHandle(saved.handle);
@@ -267,13 +377,24 @@ export default function App() {
         return true;
       } catch (err) {
         isEditingRef.current = false;
-        setSaveState('error');
-        setSaveError(
-          err instanceof Error && err.message.includes('già utilizzato')
-            ? err.message
-            : 'Impossibile salvare le modifiche su cloud.'
-        );
+        const parsed = formatFirestoreSaveError(err);
+        if (parsed.isQuotaExceeded || (err instanceof Error && err.message === 'CLOUD_SAVE_TIMEOUT')) {
+          cloudQuotaPausedRef.current = true;
+          setSaveState('local');
+        } else {
+          setSaveState('error');
+        }
+        setSaveError(parsed.message);
         return false;
+      } finally {
+        savingInFlightRef.current = false;
+        const queued = queuedSaveRef.current;
+        if (queued && !cloudQuotaPausedRef.current) {
+          queuedSaveRef.current = null;
+          void persistProfileToServer(queued.profile, queued.handleOverride, false);
+        } else {
+          queuedSaveRef.current = null;
+        }
       }
     },
     [currentUser]
@@ -284,20 +405,30 @@ export default function App() {
       if (!activeProfile) return;
       isEditingRef.current = true;
       const updated = updater(activeProfile);
+      dirtyProfileIdsRef.current.add(updated.id);
+      writeStoredDirtyIds(dirtyProfileIdsRef.current);
+
       setProfiles((prev) =>
         prev.map((p) => (p.id === activeProfile.id ? updated : p))
       );
       setActiveHandle(updated.handle);
-      setSaveState('dirty');
 
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
       }
+
+      if (cloudQuotaPausedRef.current) {
+        setSaveState('local');
+        return;
+      }
+
+      setSaveState('dirty');
       saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
         if (updated.handle.length >= 2 && updated.displayName.trim().length >= 2) {
-          void persistProfileToServer(updated);
+          void persistProfileToServer(updated, undefined, false);
         }
-      }, 650);
+      }, 450);
     },
     [activeProfile, persistProfileToServer]
   );
@@ -312,6 +443,13 @@ export default function App() {
   };
 
   const navigateToPublic = (handle: string) => {
+    if (saveTimerRef.current && activeProfile && !cloudQuotaPausedRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (activeProfile.handle.length >= 2 && activeProfile.displayName.trim().length >= 2) {
+        void persistProfileToServer(activeProfile, undefined, false);
+      }
+    }
     const clean = normalizeHandle(handle);
     setActiveHandle(clean);
     lastSavedHandleRef.current = clean;
@@ -513,22 +651,72 @@ export default function App() {
     }
   };
 
+  const formatAuthErrorMessage = (err: unknown): string => {
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? String((err as { code?: unknown }).code || '')
+        : '';
+    const msg = err instanceof Error ? err.message : String(err || '');
+    if (
+      code === 'auth/popup-closed-by-user' ||
+      code === 'auth/cancelled-popup-request' ||
+      msg.includes('popup-closed-by-user')
+    ) {
+      return '';
+    }
+    if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      return `Dominio (${host || 'corrente'}) non autorizzato per il login Google. Ricarica la pagina o verifica i domini autorizzati in Firebase.`;
+    }
+    if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
+      return 'Popup di accesso bloccato dal browser: consenti i popup per questo sito e riprova.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Errore di rete durante l’accesso con Google. Riprova.';
+    }
+    return msg || 'Accesso Google non completato.';
+  };
+
   const handleClaimOwnership = async () => {
     if (!activeProfile) return;
+    setSaveError('');
     try {
       let user = currentUser;
       if (!user) {
         const cred = await signInWithGoogle();
         user = cred.user;
       }
-      if (user && user.emailVerified && !activeProfile.ownerUid) {
+      if (!user) return;
+      if (!user.emailVerified) {
+        setSaveError('Verifica l’email del tuo account Google per bloccare le modifiche.');
+        return;
+      }
+      if (!activeProfile.ownerUid) {
         await claimProfileOwnershipInFirestore(activeProfile.handle, user.uid);
+        setProfiles((prev) =>
+          prev.map((p) =>
+            p.handle === activeProfile.handle ? { ...p, ownerUid: user.uid } : p
+          )
+        );
         setSaveState('saved');
       }
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : 'Accesso Google non completato.'
-      );
+      const friendly = formatAuthErrorMessage(err);
+      if (friendly) setSaveError(friendly);
+    }
+  };
+
+  const handleToggleAccountForLockedProfile = async () => {
+    setSaveError('');
+    try {
+      if (currentUser) {
+        await signOutGoogle();
+      } else {
+        await signInWithGoogle();
+      }
+    } catch (err) {
+      const friendly = formatAuthErrorMessage(err);
+      if (friendly) setSaveError(friendly);
     }
   };
 
@@ -816,8 +1004,15 @@ export default function App() {
                   value={activeProfile.handle}
                   onChange={(e) => {
                     const nextHandle = e.target.value;
+                    const nextProf = profiles.find((p) => p.handle === nextHandle);
                     setActiveHandle(nextHandle);
                     lastSavedHandleRef.current = nextHandle;
+                    setSaveError('');
+                    if (nextProf && dirtyProfileIdsRef.current.has(nextProf.id)) {
+                      setSaveState(cloudQuotaPausedRef.current ? 'local' : 'dirty');
+                    } else {
+                      setSaveState('saved');
+                    }
                   }}
                   className="px-3 py-1.5 text-sm font-medium bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:border-zinc-900"
                 >
@@ -875,7 +1070,14 @@ export default function App() {
 
             <div className="flex flex-wrap items-center gap-2.5">
               {saveError && (
-                <span className="text-xs text-red-600 font-medium">
+                <span
+                  role="status"
+                  className={`text-xs font-medium max-w-md ${
+                    saveState === 'local'
+                      ? 'text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg'
+                      : 'text-red-600'
+                  }`}
+                >
                   {saveError}
                 </span>
               )}
@@ -902,7 +1104,7 @@ export default function App() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => (currentUser ? signOutGoogle() : signInWithGoogle())}
+                  onClick={handleToggleAccountForLockedProfile}
                   className="px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                 >
                   <Lock className="w-3.5 h-3.5" aria-hidden="true" />
@@ -912,18 +1114,25 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={() => persistProfileToServer(activeProfile)}
+                onClick={() => persistProfileToServer(activeProfile, undefined, true)}
                 disabled={saveState === 'saving' || isLockedByOther}
                 className={`px-3.5 py-1.5 text-xs font-medium rounded-lg inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap transition-colors disabled:opacity-50 ${
                   saveState === 'saved'
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    : 'bg-[#635BFF] text-white hover:bg-[#5249F5]'
+                    : saveState === 'local'
+                      ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                      : 'bg-[#635BFF] text-white hover:bg-[#5249F5]'
                 }`}
               >
                 {saveState === 'saved' ? (
                   <>
                     <Check className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Pubblicato</span>
+                  </>
+                ) : saveState === 'local' ? (
+                  <>
+                    <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Salvato in locale · Riprova Cloud</span>
                   </>
                 ) : (
                   <>

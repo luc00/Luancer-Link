@@ -351,10 +351,29 @@ export async function createProfileInFirestore(
   }
 }
 
+async function withCloudSaveTimeout<T>(promise: Promise<T>, timeoutMs = 9000): Promise<T> {
+  let timerId: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timerId = window.setTimeout(() => {
+          reject(new Error('CLOUD_SAVE_TIMEOUT'));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timerId !== undefined) {
+      window.clearTimeout(timerId);
+    }
+  }
+}
+
 export async function saveProfileToFirestore(
   profile: BioProfile,
   previousHandle?: string,
-  currentUserUid?: string | null
+  currentUserUid?: string | null,
+  changedKeys?: ReadonlyArray<string>
 ): Promise<BioProfile> {
   const cleanHandle = normalizeHandle(profile.handle);
   if (!cleanHandle || cleanHandle.length < 2) {
@@ -364,7 +383,7 @@ export async function saveProfileToFirestore(
   const prevClean = previousHandle ? normalizeHandle(previousHandle) : cleanHandle;
   const targetPath = `${PROFILES_COLLECTION}/${cleanHandle}`;
 
-  try {
+  const executeSave = async (): Promise<BioProfile> => {
     // Handle rename flow: create under new handle doc and delete previous doc
     if (prevClean && prevClean !== cleanHandle) {
       const nextRef = doc(db, PROFILES_COLLECTION, cleanHandle);
@@ -399,31 +418,59 @@ export async function saveProfileToFirestore(
     }
 
     const ref = doc(db, PROFILES_COLLECTION, cleanHandle);
-    const snap = await getDoc(ref);
-    const fields = buildEditableFields(profile, cleanHandle);
+    const fullFields = buildEditableFields(profile, cleanHandle);
+    let patch: Record<string, unknown> = fullFields as Record<string, unknown>;
+    if (changedKeys && changedKeys.length > 0) {
+      const subset: Record<string, unknown> = {};
+      for (const k of changedKeys) {
+        if (k in fullFields) {
+          subset[k] = (fullFields as Record<string, unknown>)[k];
+        }
+      }
+      if (Object.keys(subset).length > 0) {
+        patch = subset;
+      }
+    }
 
-    if (!snap.exists()) {
-      await setDoc(ref, {
-        id: clampString(profile.id, 64, `prof_${cleanHandle}`),
-        handle: cleanHandle,
-        ...fields,
-        views: 0,
-        ownerUid: profile.ownerUid ?? currentUserUid ?? null,
-        isPublic: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    } else {
+    try {
       await updateDoc(ref, {
-        ...fields,
+        ...patch,
         updatedAt: serverTimestamp(),
       });
+    } catch (updateErr) {
+      const code =
+        updateErr && typeof updateErr === 'object' && 'code' in updateErr
+          ? String((updateErr as { code?: unknown }).code || '')
+          : '';
+      if (code === 'not-found') {
+        await setDoc(ref, {
+          id: clampString(profile.id, 64, `prof_${cleanHandle}`),
+          handle: cleanHandle,
+          ...fullFields,
+          views: 0,
+          ownerUid: profile.ownerUid ?? currentUserUid ?? null,
+          isPublic: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        throw updateErr;
+      }
     }
 
     return { ...profile, handle: cleanHandle, updatedAt: new Date().toISOString() };
+  };
+
+  try {
+    return await withCloudSaveTimeout(executeSave(), 5000);
   } catch (error) {
-    if (error instanceof Error && error.message.includes('già utilizzato')) {
-      throw error;
+    if (error instanceof Error) {
+      if (
+        error.message.includes('già utilizzato') ||
+        error.message === 'CLOUD_SAVE_TIMEOUT'
+      ) {
+        throw error;
+      }
     }
     handleFirestoreError(error, OperationType.UPDATE, targetPath);
   }

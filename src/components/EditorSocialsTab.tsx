@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   Eye,
   EyeOff,
+  GripVertical,
   ImagePlus,
   Minus,
   Plus,
@@ -27,6 +28,7 @@ import {
   getSocialIconShapeRadiusClass,
   moveItem,
   normalizeUrl,
+  reorderList,
 } from '../utils/profileLogic';
 import { compressImageFileToDataUrl } from '../utils/imageUpload';
 
@@ -59,6 +61,12 @@ export function EditorSocialsTab({ profile, onChange }: EditorSocialsTabProps) {
   const [newDividerStyle, setNewDividerStyle] = useState<SocialDividerStyle>('line');
   const [newDividerColor, setNewDividerColor] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [draggedSocialId, setDraggedSocialId] = useState<string | null>(null);
+  const draggedSocialIdRef = useRef<string | null>(null);
+  const [dropTargetSocial, setDropTargetSocial] = useState<{
+    id: string;
+    position: 'above' | 'below';
+  } | null>(null);
 
   const selectedMeta =
     SOCIAL_PLATFORMS.find((p) => p.id === newPlatform) || SOCIAL_PLATFORMS[0];
@@ -520,10 +528,15 @@ export function EditorSocialsTab({ profile, onChange }: EditorSocialsTabProps) {
 
       {/* Active Socials & Dividers List */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-zinc-900">
             Social configurati ({profile.socials.length})
           </h3>
+          {profile.socials.length > 1 && (
+            <span className="text-[11px] text-zinc-500">
+              Trascina con il mouse per riordinare
+            </span>
+          )}
         </div>
 
         {profile.socials.length === 0 ? (
@@ -533,14 +546,100 @@ export function EditorSocialsTab({ profile, onChange }: EditorSocialsTabProps) {
         ) : (
           <div className="space-y-2.5">
             {profile.socials.map((soc, idx) => {
+              const isDragging = draggedSocialId === soc.id;
+              const dropPos =
+                dropTargetSocial?.id === soc.id ? dropTargetSocial.position : null;
+              const handleSocialDrop = (e: React.DragEvent<HTMLDivElement>) => {
+                e.preventDefault();
+                const sourceId =
+                  draggedSocialIdRef.current ||
+                  draggedSocialId ||
+                  e.dataTransfer.getData('text/plain');
+                if (sourceId && sourceId !== soc.id) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const pos =
+                    dropTargetSocial?.id === soc.id
+                      ? dropTargetSocial.position
+                      : e.clientY < rect.top + rect.height / 2
+                        ? 'above'
+                        : 'below';
+                  onChange((prev) => {
+                    const fromIdx = prev.socials.findIndex((s) => s.id === sourceId);
+                    const rawTarget = prev.socials.findIndex((s) => s.id === soc.id);
+                    if (fromIdx === -1 || rawTarget === -1) return prev;
+                    let toIdx = pos === 'above' ? rawTarget : rawTarget + 1;
+                    if (fromIdx < toIdx) toIdx -= 1;
+                    if (fromIdx === toIdx) return prev;
+                    return {
+                      ...prev,
+                      socials: reorderList(prev.socials, fromIdx, toIdx),
+                    };
+                  });
+                }
+                draggedSocialIdRef.current = null;
+                setDraggedSocialId(null);
+                setDropTargetSocial(null);
+              };
+              const handleSocialDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+                const activeSource = draggedSocialIdRef.current || draggedSocialId;
+                if (!activeSource || activeSource === soc.id) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pos = e.clientY < rect.top + rect.height / 2 ? 'above' : 'below';
+                setDropTargetSocial((prev) =>
+                  prev?.id === soc.id && prev.position === pos
+                    ? prev
+                    : { id: soc.id, position: pos }
+                );
+              };
+
               if (soc.kind === 'divider') {
                 return (
                   <div
                     key={soc.id}
-                    className={`p-3 bg-zinc-50 border border-dashed border-zinc-300 rounded-xl flex flex-wrap items-center gap-2.5 ${
-                      !soc.visible ? 'opacity-60' : ''
-                    }`}
+                    data-social-id={soc.id}
+                    onDragOver={handleSocialDragOver}
+                    onDrop={handleSocialDrop}
+                    className={`relative p-3 bg-zinc-50 border border-dashed rounded-xl flex flex-wrap items-center gap-2.5 overflow-hidden transition-colors ${
+                      isDragging
+                        ? 'opacity-45 border-zinc-400'
+                        : dropPos
+                          ? 'border-[#635BFF]/50'
+                          : 'border-zinc-300'
+                    } ${!soc.visible && !isDragging ? 'opacity-60' : ''}`}
                   >
+                    {dropPos === 'above' && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute top-0 inset-x-0 h-[3px] bg-[#635BFF] pointer-events-none z-20"
+                      />
+                    )}
+                    {dropPos === 'below' && (
+                      <div
+                        aria-hidden="true"
+                        className="absolute bottom-0 inset-x-0 h-[3px] bg-[#635BFF] pointer-events-none z-20"
+                      />
+                    )}
+                    <span
+                      draggable
+                      onDragStart={(e) => {
+                        draggedSocialIdRef.current = soc.id;
+                        setDraggedSocialId(soc.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', soc.id);
+                      }}
+                      onDragEnd={() => {
+                        draggedSocialIdRef.current = null;
+                        setDraggedSocialId(null);
+                        setDropTargetSocial(null);
+                      }}
+                      aria-hidden="true"
+                      title="Trascina con il mouse per spostare"
+                      className="text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/60 rounded p-1 -ml-1 cursor-grab active:cursor-grabbing shrink-0 select-none"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </span>
                     <span className="px-2 py-1 text-[11px] font-semibold text-zinc-700 bg-white border border-zinc-200 rounded-md inline-flex items-center gap-1 shrink-0">
                       <Minus className="w-3 h-3" aria-hidden="true" />
                       <span>Divisore</span>
@@ -634,26 +733,68 @@ export function EditorSocialsTab({ profile, onChange }: EditorSocialsTabProps) {
               return (
                 <div
                   key={soc.id}
-                  className={`p-3 bg-white border border-zinc-200 rounded-xl space-y-2.5 ${
-                    !soc.visible ? 'opacity-60' : ''
-                  }`}
+                  data-social-id={soc.id}
+                  onDragOver={handleSocialDragOver}
+                  onDrop={handleSocialDrop}
+                  className={`relative p-3 bg-white border rounded-xl space-y-2.5 overflow-hidden transition-colors ${
+                    isDragging
+                      ? 'opacity-45 border-zinc-400'
+                      : dropPos
+                        ? 'border-[#635BFF]/40'
+                        : 'border-zinc-200'
+                  } ${!soc.visible && !isDragging ? 'opacity-60' : ''}`}
                 >
+                  {dropPos === 'above' && (
+                    <div
+                      aria-hidden="true"
+                      className="absolute top-0 inset-x-0 h-[3px] bg-[#635BFF] pointer-events-none z-20"
+                    />
+                  )}
+                  {dropPos === 'below' && (
+                    <div
+                      aria-hidden="true"
+                      className="absolute bottom-0 inset-x-0 h-[3px] bg-[#635BFF] pointer-events-none z-20"
+                    />
+                  )}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
                     <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        className={`w-9 h-9 bg-white border border-zinc-200 overflow-hidden inline-flex items-center justify-center shadow-xs ${shapeRadiusClass}`}
+                      <div
+                        draggable
+                        onDragStart={(e) => {
+                          draggedSocialIdRef.current = soc.id;
+                          setDraggedSocialId(soc.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', soc.id);
+                        }}
+                        onDragEnd={() => {
+                          draggedSocialIdRef.current = null;
+                          setDraggedSocialId(null);
+                          setDropTargetSocial(null);
+                        }}
+                        title="Trascina con il mouse per spostare"
+                        className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none shrink-0"
                       >
-                        {soc.iconImageUrl ? (
-                          <img
-                            src={soc.iconImageUrl}
-                            alt={soc.label || soc.platform}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <SocialIcon platform={soc.platform} fullColor className="w-4 h-4" />
-                        )}
-                      </span>
+                        <span
+                          aria-hidden="true"
+                          className="text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded p-1 -ml-1 shrink-0 transition-colors"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </span>
+                        <span
+                          className={`w-9 h-9 bg-white border border-zinc-200 overflow-hidden inline-flex items-center justify-center shadow-xs ${shapeRadiusClass}`}
+                        >
+                          {soc.iconImageUrl ? (
+                            <img
+                              src={soc.iconImageUrl}
+                              alt={soc.label || soc.platform}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <SocialIcon platform={soc.platform} fullColor className="w-4 h-4" />
+                          )}
+                        </span>
+                      </div>
                       <input
                         type="text"
                         aria-label={`Titolo per ${soc.label || soc.platform}`}
