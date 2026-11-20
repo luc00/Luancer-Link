@@ -44,6 +44,7 @@ import {
   saveProfileToFirestore,
   seedInitialProfilesIfEmpty,
   submitMessageToFirestore,
+  subscribeToProfileByHandle,
   subscribeToPublicProfiles,
 } from './services/profileRepository';
 import { ProfileRenderer } from './components/ProfileRenderer';
@@ -58,7 +59,54 @@ import { LinkmeLandingView } from './components/LinkmeLandingView';
 import { LuancerLogo } from './components/LuancerLogo';
 
 const STORAGE_KEY = 'linkme_profiles_cache_v3';
+const PUBLIC_PROFILE_CACHE_PREFIX = 'linkme_public_profile_v1_';
+const LAST_STUDIO_HANDLE_KEY = 'linkme_last_studio_handle_v1';
 const DIRTY_STORAGE_KEY = 'linkme_dirty_profile_ids_v1';
+
+function readCachedPublicProfile(handle: string | null): BioProfile | null {
+  if (!handle) return null;
+  try {
+    const raw = localStorage.getItem(`${PUBLIC_PROFILE_CACHE_PREFIX}${handle}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as BioProfile;
+    if (parsed && typeof parsed.handle === 'string') {
+      return migrateProfileSchema(parsed);
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
+function writeCachedPublicProfile(profile: BioProfile) {
+  try {
+    localStorage.setItem(
+      `${PUBLIC_PROFILE_CACHE_PREFIX}${profile.handle}`,
+      JSON.stringify(profile)
+    );
+  } catch {
+    // ignore storage quota
+  }
+}
+
+function readLastStudioHandle(): string | null {
+  try {
+    const raw = localStorage.getItem(LAST_STUDIO_HANDLE_KEY);
+    return raw ? normalizeHandle(raw) || null : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastStudioHandle(handle: string) {
+  try {
+    if (handle) {
+      localStorage.setItem(LAST_STUDIO_HANDLE_KEY, handle);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function readStoredDirtyIds(): Set<string> {
   try {
@@ -105,37 +153,55 @@ function readInitialQueryParams(): {
   }
   const params = new URLSearchParams(window.location.search);
   const raw = params.get('u');
-  if (raw) {
-    return { publicHandle: normalizeHandle(raw), viewMode: 'public' };
-  }
+  const handle = raw ? normalizeHandle(raw) : null;
   const view = params.get('view');
-  if (view === 'studio') return { publicHandle: null, viewMode: 'studio' };
-  if (view === 'directory') return { publicHandle: null, viewMode: 'directory' };
+  if (view === 'studio') return { publicHandle: handle, viewMode: 'studio' };
+  if (view === 'directory') return { publicHandle: handle, viewMode: 'directory' };
+  if (handle) {
+    return { publicHandle: handle, viewMode: 'public' };
+  }
   return { publicHandle: null, viewMode: 'landing' };
+}
+
+function readInitialProfiles(initialHandle: string | null): BioProfile[] {
+  let list: BioProfile[] = SEED_PROFILES;
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached) as BioProfile[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        list = parsed.map(migrateProfileSchema);
+      }
+    }
+  } catch {
+    // ignore cache errors
+  }
+
+  const cachedTarget = readCachedPublicProfile(initialHandle);
+  if (cachedTarget) {
+    const exists = list.some((p) => p.handle === cachedTarget.handle);
+    list = exists
+      ? list.map((p) => (p.handle === cachedTarget.handle ? cachedTarget : p))
+      : [cachedTarget, ...list];
+  }
+  return list;
 }
 
 export default function App() {
   const [{ publicHandle: initialPublicHandle, viewMode: initialViewMode }] =
     useState(readInitialQueryParams);
 
-  const [profiles, setProfiles] = useState<BioProfile[]>(() => {
-    try {
-      const cached = localStorage.getItem(STORAGE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as BioProfile[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map(migrateProfileSchema);
-        }
-      }
-    } catch {
-      // ignore cache errors
-    }
-    return SEED_PROFILES;
-  });
-
-  const [activeHandle, setActiveHandle] = useState<string>(
-    initialPublicHandle || SEED_PROFILES[0].handle
+  const [profiles, setProfiles] = useState<BioProfile[]>(() =>
+    readInitialProfiles(initialPublicHandle || (initialViewMode === 'studio' ? readLastStudioHandle() : null))
   );
+
+  const [activeHandle, setActiveHandle] = useState<string>(() => {
+    if (initialPublicHandle) return initialPublicHandle;
+    if (initialViewMode === 'studio') {
+      return readLastStudioHandle() || SEED_PROFILES[0].handle;
+    }
+    return SEED_PROFILES[0].handle;
+  });
   const [workspace, setWorkspace] = useState<AppWorkspace>(initialViewMode);
   const [studioTab, setStudioTab] = useState<StudioTab>('profile');
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('mobile');
@@ -144,6 +210,7 @@ export default function App() {
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'dirty' | 'local' | 'error'>('saved');
   const [saveError, setSaveError] = useState('');
   const [isLoadingServer, setIsLoadingServer] = useState(true);
+  const [publicNotFound, setPublicNotFound] = useState(false);
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
 
   const saveTimerRef = useRef<number | null>(null);
@@ -157,8 +224,12 @@ export default function App() {
   const cloudQuotaPausedRef = useRef<boolean>(false);
   const lastIncrementedViewHandleRef = useRef<string>('');
 
+  const matchedActiveProfile =
+    profiles.find((p) => p.handle === activeHandle) ?? null;
   const activeProfile =
-    profiles.find((p) => p.handle === activeHandle) || profiles[0];
+    workspace === 'public'
+      ? matchedActiveProfile
+      : matchedActiveProfile || profiles[0];
 
   // Track Firebase Auth user state cleanly
   useEffect(() => {
@@ -177,71 +248,123 @@ export default function App() {
     };
   }, []);
 
-  // Live Firestore hydration + real-time cross-visitor synchronization
+  // Live Firestore hydration: direct 1-doc fetch for public view, full collection for Studio/Directory/Landing
   useEffect(() => {
-    let unsubSnapshots: (() => void) | null = null;
     let active = true;
 
-    seedInitialProfilesIfEmpty()
-      .catch((err) => {
-        console.error('Seed check error:', err);
-      })
-      .finally(() => {
-        if (!active) return;
-        unsubSnapshots = subscribeToPublicProfiles(
-          (cloudProfiles) => {
-            if (!active) return;
-            if (cloudProfiles.length > 0) {
-              setProfiles((prev) => {
-                const normalized = cloudProfiles.map(migrateProfileSchema);
-                for (const cp of normalized) {
-                  if (!dirtyProfileIdsRef.current.has(cp.id)) {
-                    lastSavedFingerprintRef.current.set(
-                      cp.id,
-                      getEditableProfileFingerprint(cp)
-                    );
-                    lastSyncedProfileRef.current.set(cp.id, cp);
-                  }
-                }
-                const dirtyIds = dirtyProfileIdsRef.current;
-                if (isEditingRef.current || dirtyIds.size > 0) {
-                  const merged = normalized.map((cloudItem) => {
-                    if (
-                      dirtyIds.has(cloudItem.id) ||
-                      (isEditingRef.current && cloudItem.handle === lastSavedHandleRef.current)
-                    ) {
-                      const localMatch = prev.find((p) => p.id === cloudItem.id);
-                      return localMatch || cloudItem;
-                    }
-                    return cloudItem;
-                  });
-                  for (const localItem of prev) {
-                    if (
-                      (dirtyIds.has(localItem.id) ||
-                        (isEditingRef.current && localItem.handle === lastSavedHandleRef.current)) &&
-                      !merged.some((m) => m.id === localItem.id)
-                    ) {
-                      merged.unshift(localItem);
-                    }
-                  }
-                  return merged;
-                }
-                return normalized;
-              });
-            }
-            setIsLoadingServer(false);
-          },
-          () => {
-            if (active) setIsLoadingServer(false);
+    if (workspace === 'public') {
+      setPublicNotFound(false);
+      setIsLoadingServer(true);
+
+      const unsubSingle = subscribeToProfileByHandle(
+        activeHandle,
+        (cloudProfile) => {
+          if (!active) return;
+          const normalized = migrateProfileSchema(cloudProfile);
+          if (!dirtyProfileIdsRef.current.has(normalized.id)) {
+            lastSavedFingerprintRef.current.set(
+              normalized.id,
+              getEditableProfileFingerprint(normalized)
+            );
+            lastSyncedProfileRef.current.set(normalized.id, normalized);
+            writeCachedPublicProfile(normalized);
           }
-        );
-      });
+          setProfiles((prev) => {
+            if (dirtyProfileIdsRef.current.has(normalized.id)) {
+              const existingLocal = prev.find((p) => p.id === normalized.id);
+              if (existingLocal) {
+                writeCachedPublicProfile(existingLocal);
+                return prev;
+              }
+            }
+            const exists = prev.some(
+              (p) => p.id === normalized.id || p.handle === normalized.handle
+            );
+            return exists
+              ? prev.map((p) =>
+                  p.id === normalized.id || p.handle === normalized.handle
+                    ? normalized
+                    : p
+                )
+              : [normalized, ...prev];
+          });
+          setPublicNotFound(false);
+          setIsLoadingServer(false);
+        },
+        () => {
+          if (!active) return;
+          setPublicNotFound(true);
+          setIsLoadingServer(false);
+        },
+        () => {
+          if (active) setIsLoadingServer(false);
+        }
+      );
+
+      return () => {
+        active = false;
+        unsubSingle();
+      };
+    }
+
+    setIsLoadingServer(true);
+    seedInitialProfilesIfEmpty().catch((err) => {
+      console.error('Seed check error:', err);
+    });
+
+    const unsubSnapshots = subscribeToPublicProfiles(
+      (cloudProfiles) => {
+        if (!active) return;
+        if (cloudProfiles.length > 0) {
+          setProfiles((prev) => {
+            const normalized = cloudProfiles.map(migrateProfileSchema);
+            for (const cp of normalized) {
+              if (!dirtyProfileIdsRef.current.has(cp.id)) {
+                lastSavedFingerprintRef.current.set(
+                  cp.id,
+                  getEditableProfileFingerprint(cp)
+                );
+                lastSyncedProfileRef.current.set(cp.id, cp);
+              }
+            }
+            const dirtyIds = dirtyProfileIdsRef.current;
+            if (isEditingRef.current || dirtyIds.size > 0) {
+              const merged = normalized.map((cloudItem) => {
+                if (
+                  dirtyIds.has(cloudItem.id) ||
+                  (isEditingRef.current && cloudItem.handle === lastSavedHandleRef.current)
+                ) {
+                  const localMatch = prev.find((p) => p.id === cloudItem.id);
+                  return localMatch || cloudItem;
+                }
+                return cloudItem;
+              });
+              for (const localItem of prev) {
+                if (
+                  (dirtyIds.has(localItem.id) ||
+                    (isEditingRef.current && localItem.handle === lastSavedHandleRef.current)) &&
+                  !merged.some((m) => m.id === localItem.id)
+                ) {
+                  merged.unshift(localItem);
+                }
+              }
+              return merged;
+            }
+            return normalized;
+          });
+        }
+        setIsLoadingServer(false);
+      },
+      () => {
+        if (active) setIsLoadingServer(false);
+      }
+    );
 
     return () => {
       active = false;
-      if (unsubSnapshots) unsubSnapshots();
+      unsubSnapshots();
     };
-  }, []);
+  }, [workspace, activeHandle]);
 
   // Load owner-only messages subcollection when signed-in owner views Studio
   useEffect(() => {
@@ -274,26 +397,31 @@ export default function App() {
     };
   }, [workspace, activeProfile?.handle, activeProfile?.ownerUid, currentUser]);
 
-  // Keep localStorage synced
+  // Keep localStorage synced (and single-handle public cache synced)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
     } catch {
       // ignore storage quota
     }
-  }, [profiles]);
+    if (activeHandle) {
+      const current = profiles.find((p) => p.handle === activeHandle);
+      if (current) {
+        writeCachedPublicProfile(current);
+      }
+    }
+  }, [profiles, activeHandle]);
 
   // Listen to browser back/forward navigation
   useEffect(() => {
     const onPopState = () => {
       const { publicHandle, viewMode } = readInitialQueryParams();
+      setPublicNotFound(false);
       if (publicHandle) {
         setActiveHandle(publicHandle);
         lastSavedHandleRef.current = publicHandle;
-        setWorkspace('public');
-      } else {
-        setWorkspace(viewMode);
       }
+      setWorkspace(viewMode);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -302,14 +430,14 @@ export default function App() {
   // Increment public view counter in Firestore when entering standalone public page
   useEffect(() => {
     if (workspace !== 'public' || !activeProfile || isLoadingServer) return;
-    if (activeProfile.handle !== activeHandle && profiles.every((p) => p.handle !== activeHandle)) {
+    if (activeProfile.handle !== activeHandle) {
       return;
     }
     if (lastIncrementedViewHandleRef.current === activeProfile.handle) return;
     lastIncrementedViewHandleRef.current = activeProfile.handle;
 
     incrementViewInFirestore(activeProfile.handle).catch(() => {});
-  }, [workspace, activeProfile?.handle, activeHandle, isLoadingServer, profiles]);
+  }, [workspace, activeProfile?.handle, activeHandle, isLoadingServer]);
 
   const persistProfileToServer = useCallback(
     async (
@@ -451,6 +579,11 @@ export default function App() {
       }
     }
     const clean = normalizeHandle(handle);
+    const matched = profiles.find((p) => p.handle === clean);
+    if (matched) {
+      writeCachedPublicProfile(matched);
+    }
+    setPublicNotFound(false);
     setActiveHandle(clean);
     lastSavedHandleRef.current = clean;
     setWorkspace('public');
@@ -461,16 +594,23 @@ export default function App() {
   };
 
   const navigateToStudio = (handle?: string, tab?: StudioTab) => {
+    const targetHandle = handle ? normalizeHandle(handle) : activeHandle;
     if (handle) {
-      const clean = normalizeHandle(handle);
-      setActiveHandle(clean);
-      lastSavedHandleRef.current = clean;
+      setActiveHandle(targetHandle);
+      lastSavedHandleRef.current = targetHandle;
+    }
+    if (targetHandle) {
+      writeLastStudioHandle(targetHandle);
     }
     if (tab) setStudioTab(tab);
     setWorkspace('studio');
     const url = new URL(window.location.href);
-    url.searchParams.delete('u');
     url.searchParams.set('view', 'studio');
+    if (targetHandle) {
+      url.searchParams.set('u', targetHandle);
+    } else {
+      url.searchParams.delete('u');
+    }
     window.history.pushState({}, '', url.toString());
   };
 
@@ -741,35 +881,9 @@ export default function App() {
     await persistProfileToServer(normalized, cleanHandle);
   };
 
-  if (!activeProfile) return null;
-
-  // Homepage Clone of linkme.bio
-  if (workspace === 'landing') {
-    return (
-      <>
-        <LinkmeLandingView
-          profiles={profiles}
-          onClaimHandle={handleClaimHandle}
-          onOpenStudio={(tab) => navigateToStudio(activeProfile.handle, tab || 'profile')}
-          onOpenDirectory={navigateToDirectory}
-          onViewPublic={navigateToPublic}
-        />
-        <CreateProfileModal
-          isOpen={isCreateOpen}
-          existingHandles={profiles.map((p) => p.handle)}
-          templates={profiles}
-          onClose={() => setIsCreateOpen(false)}
-          onCreate={handleCreateProfile}
-        />
-      </>
-    );
-  }
-
-  // Standalone Public Profile Page View
+  // Standalone Public Profile Page View (never falls back to profiles[0] / other profiles)
   if (workspace === 'public') {
-    const waitingForSharedHandle =
-      isLoadingServer &&
-      !profiles.some((p) => p.handle === activeHandle);
+    const waitingForSharedHandle = !activeProfile && isLoadingServer && !publicNotFound;
 
     return (
       <div className="min-h-screen flex flex-col bg-zinc-950">
@@ -794,19 +908,21 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {activeProfile && (
+              <button
+                type="button"
+                onClick={() => setIsShareOpen(true)}
+                aria-label="QR e Condividi"
+                className="px-2.5 sm:px-3 py-1.5 text-xs font-medium text-zinc-100 bg-white/10 hover:bg-white/20 rounded-lg inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="sm:hidden">QR</span>
+                <span className="hidden sm:inline">QR &amp; Condividi</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setIsShareOpen(true)}
-              aria-label="QR e Condividi"
-              className="px-2.5 sm:px-3 py-1.5 text-xs font-medium text-zinc-100 bg-white/10 hover:bg-white/20 rounded-lg inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="sm:hidden">QR</span>
-              <span className="hidden sm:inline">QR &amp; Condividi</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateToStudio(activeProfile.handle, 'profile')}
+              onClick={() => navigateToStudio(activeProfile?.handle || activeHandle, 'profile')}
               className="px-3 sm:px-3.5 py-1.5 text-xs font-medium text-zinc-950 bg-white hover:bg-zinc-200 rounded-lg inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <PenLine className="w-3.5 h-3.5" aria-hidden="true" />
@@ -825,8 +941,9 @@ export default function App() {
                 <div className="h-14 bg-white/10 rounded-xl" />
               </div>
             </div>
-          ) : (
+          ) : activeProfile ? (
             <ProfileRenderer
+              key={activeProfile.handle}
               profile={activeProfile}
               isPublicStandalone
               onBlockClick={handleBlockClick}
@@ -834,17 +951,74 @@ export default function App() {
               onOpenShare={() => setIsShareOpen(true)}
               onOpenLanding={navigateToLanding}
             />
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-8 text-center">
+              <div className="max-w-sm space-y-4 bg-white/5 border border-white/10 rounded-2xl p-6 text-zinc-100">
+                <p className="text-base font-semibold">
+                  {publicNotFound
+                    ? `Profilo @${activeHandle} non trovato`
+                    : `Impossibile caricare @${activeHandle}`}
+                </p>
+                <p className="text-xs text-zinc-400">
+                  {publicNotFound
+                    ? 'Verifica il link o crea questo profilo direttamente in Studio.'
+                    : 'Connessione temporaneamente non disponibile. Riprova tra qualche istante.'}
+                </p>
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 text-xs font-medium bg-white text-zinc-950 rounded-lg hover:bg-zinc-200 cursor-pointer"
+                  >
+                    Riprova
+                  </button>
+                  <button
+                    type="button"
+                    onClick={navigateToLanding}
+                    className="px-4 py-2 text-xs font-medium bg-white/10 text-zinc-100 rounded-lg hover:bg-white/20 cursor-pointer"
+                  >
+                    Vai alla Home
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
-        <ShareQrModal
-          profile={activeProfile}
-          isOpen={isShareOpen}
-          onClose={() => setIsShareOpen(false)}
-          onOpenPublicPage={() => {}}
-          onImportProfileJson={handleImportProfileJson}
-        />
+        {activeProfile && (
+          <ShareQrModal
+            profile={activeProfile}
+            isOpen={isShareOpen}
+            onClose={() => setIsShareOpen(false)}
+            onOpenPublicPage={() => {}}
+            onImportProfileJson={handleImportProfileJson}
+          />
+        )}
       </div>
+    );
+  }
+
+  if (!activeProfile) return null;
+
+  // Homepage Clone of linkme.bio
+  if (workspace === 'landing') {
+    return (
+      <>
+        <LinkmeLandingView
+          profiles={profiles}
+          onClaimHandle={handleClaimHandle}
+          onOpenStudio={(tab) => navigateToStudio(activeProfile.handle, tab || 'profile')}
+          onOpenDirectory={navigateToDirectory}
+          onViewPublic={navigateToPublic}
+        />
+        <CreateProfileModal
+          isOpen={isCreateOpen}
+          existingHandles={profiles.map((p) => p.handle)}
+          templates={profiles}
+          onClose={() => setIsCreateOpen(false)}
+          onCreate={handleCreateProfile}
+        />
+      </>
     );
   }
 
@@ -1007,6 +1181,7 @@ export default function App() {
                     const nextProf = profiles.find((p) => p.handle === nextHandle);
                     setActiveHandle(nextHandle);
                     lastSavedHandleRef.current = nextHandle;
+                    writeLastStudioHandle(nextHandle);
                     setSaveError('');
                     if (nextProf && dirtyProfileIdsRef.current.has(nextProf.id)) {
                       setSaveState(cloudQuotaPausedRef.current ? 'local' : 'dirty');
@@ -1196,7 +1371,7 @@ export default function App() {
               </div>
 
               <div className="p-5 sm:p-6">
-                {isLoadingServer ? (
+                {isLoadingServer && !matchedActiveProfile ? (
                   <div className="space-y-4 animate-pulse">
                     <div className="h-6 bg-zinc-200 rounded w-1/3" />
                     <div className="h-24 bg-zinc-100 rounded-xl" />

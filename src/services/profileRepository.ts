@@ -309,6 +309,43 @@ export function subscribeToPublicProfiles(
   );
 }
 
+const VALID_HANDLE_PATTERN = /^[a-z0-9][a-z0-9._-]{0,38}[a-z0-9]$/;
+
+export function subscribeToProfileByHandle(
+  handle: string,
+  onProfile: (profile: BioProfile) => void,
+  onNotFound: () => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const cleanHandle = normalizeHandle(handle);
+  if (!cleanHandle || !VALID_HANDLE_PATTERN.test(cleanHandle)) {
+    onNotFound();
+    return () => {};
+  }
+
+  const ref = doc(db, PROFILES_COLLECTION, cleanHandle);
+  return onSnapshot(
+    ref,
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        if (!snapshot.metadata.fromCache) {
+          onNotFound();
+        }
+        return;
+      }
+      const data = snapshot.data() as Record<string, unknown>;
+      if (data.isPublic === false) {
+        onNotFound();
+        return;
+      }
+      onProfile(docToProfile(data, snapshot.id));
+    },
+    (error) => {
+      if (onError) onError(error);
+    }
+  );
+}
+
 export async function createProfileInFirestore(
   profile: BioProfile,
   ownerUid: string | null = null
